@@ -11,11 +11,11 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = (n) => String(n).padStart(2, "0");
 const now = new Date();
-const S = { user: null, group: null, members: [], tasks: [], busy: [], meetings: [], mine: new Set(), dirty: false, view: "home", month: new Date(now.getFullYear(), now.getMonth(), 1), sub: false, cols: [], doneIds: new Set(), dragging: false, gtoken: null, gcals: [], gevents: [], gerr: "" };
+const S = { user: null, groups: [], choosingGroup: false, group: null, members: [], tasks: [], busy: [], meetings: [], mine: new Set(), dirty: false, view: "home", month: new Date(now.getFullYear(), now.getMonth(), 1), sub: false, cols: [], doneIds: new Set(), dragging: false, gtoken: null, gcals: [], gevents: [], gerr: "" };
 const DAYS = ["M", "T", "W", "Th", "F", "S"], SLOTS = 32, PR = ["", "Low", "Medium", "High"];
 const FIELDS = [["role", "Role"], ["full_name", "Full name"], ["id_number", "ID number"], ["address", "Address"], ["contact", "Contact no."], ["discord", "Discord handle"], ["birthday", "Birthday", "date"]];
 
-const nm = (p) => (p ? p.full_name || p.email.split("@")[0] : "Unassigned");
+const nm = (p) => (p ? p.full_name || (p.email || "Member").split("@")[0] : "Unassigned");
 const today = () => new Date(new Date().setHours(0, 0, 0, 0));
 const left = (t) => (t.due ? Math.round((new Date(t.due + "T00:00") - today()) / 864e5) : 9999);
 const urgent = (a, b) => left(a) - left(b) || b.priority - a.priority;
@@ -68,26 +68,91 @@ $("auth-form").onsubmit = async (e) => {
 };
 $("signout-btn").onclick = () => db.auth.signOut();
 
+// Supabase Google Sign-In. This is separate from Google Calendar authorization.
+$("google-login-btn").onclick = async () => {
+  const btn = $("google-login-btn");
+  btn.disabled = true;
+  try {
+    const { error } = await db.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: "https://maiiic.github.io/projectmanager/" }
+    });
+    if (error) throw error;
+  } catch (err) {
+    showMessage("Google sign-in failed: " + err.message, true);
+    btn.disabled = false;
+  }
+};
+
 /* ---------- data ---------- */
 async function boot(session) {
+  const previousUser = S.user?.id;
   S.user = session?.user || null;
   $("auth-page").hidden = !!S.user;
   $("app-view").hidden = !S.user;
-  if (!S.user) { S.group = null; return; }
-  $("who").textContent = S.user.email;
-  const { data, error } = await db.from("group_members").select("groups(id,name,code,gcal_id)").eq("user_id", S.user.id).limit(1);
-  if (error) return alert(error.message);
-  S.group = data[0]?.groups || null;
-  $("nav").hidden = !S.group;
-  $("group-name").textContent = S.group ? S.group.name : "No group yet";
-  $("group-code").textContent = S.group ? `Invite code: ${S.group.code}` : "";
-  if (!S.group) { $("content").innerHTML = onboard(); return; }
-  await load(true);
-  if (!S.sub) { S.sub = true; db.channel("sync").on("postgres_changes", { event: "*", schema: "public" }, () => load()).subscribe(); }
+  if (!S.user) {
+    S.group = null; S.groups = []; S.choosingGroup = false;
+    S.gtoken = null; S.gcals = []; S.gevents = [];
+    if (S.channel) { await db.removeChannel(S.channel); S.channel = null; }
+    return;
+  }
+  if (previousUser && previousUser !== S.user.id) {
+    S.group = null; S.gtoken = null; S.gcals = []; S.gevents = [];
+  }
+  $("who").textContent = S.user.email || "Signed in";
+  await refreshGroups();
+  if (!S.groups.length) return showGroupPicker();
+  let preferred;
+  try { preferred = localStorage.getItem(`pm-group-${S.user.id}`); } catch {}
+  const selected = S.groups.find((g) => g.id === preferred) || S.groups[0];
+  await selectGroup(selected);
 }
 
+async function refreshGroups() {
+  const { data, error } = await db.from("group_members")
+    .select("groups(id,name,code,gcal_id)").eq("user_id", S.user.id);
+  if (error) { alert(error.message); return; }
+  S.groups = (data || []).map((x) => x.groups).filter(Boolean);
+}
+
+async function selectGroup(group) {
+  if (!group) return showGroupPicker();
+  if (S.channel) { await db.removeChannel(S.channel); S.channel = null; }
+  S.group = group;
+  S.choosingGroup = false;
+  S.members = []; S.tasks = []; S.busy = []; S.meetings = [];
+  S.cols = []; S.mine = new Set(); S.doneIds = new Set(); S.dirty = false;
+  S.gevents = []; S.gerr = "";
+  S.view = "home";
+  try { localStorage.setItem(`pm-group-${S.user.id}`, group.id); } catch {}
+  $("nav").hidden = false;
+  $("group-name").textContent = group.name;
+  $("group-code").textContent = `Invite code: ${group.code}`;
+  await load(true);
+  if (S.gtoken) { await gload(); draw(); }
+  S.channel = db.channel(`pm-${group.id}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `group_id=eq.${group.id}` }, () => load())
+    .on("postgres_changes", { event: "*", schema: "public", table: "availability", filter: `group_id=eq.${group.id}` }, () => load())
+    .on("postgres_changes", { event: "*", schema: "public", table: "meetings", filter: `group_id=eq.${group.id}` }, () => load())
+    .on("postgres_changes", { event: "*", schema: "public", table: "task_columns", filter: `group_id=eq.${group.id}` }, () => load())
+    .subscribe();
+}
+
+function showGroupPicker() {
+  S.choosingGroup = true;
+  $("nav").hidden = true;
+  $("group-name").textContent = "Your groups";
+  $("group-code").textContent = "Choose, create or join";
+  $("content").innerHTML = onboard();
+}
+
+$("group-switch-btn").onclick = async () => {
+  await refreshGroups();
+  showGroupPicker();
+};
+
 async function load(force) {
-  if (!S.group) return;
+  if (!S.group || S.choosingGroup) return;
   const g = S.group.id;
   const r = await Promise.all([
     db.from("group_members").select("profiles(*)").eq("group_id", g),
@@ -107,6 +172,7 @@ async function load(force) {
 
 /* ---------- views ---------- */
 function draw() {
+  if (S.choosingGroup) return showGroupPicker();
   document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("is-active", b.dataset.go === S.view));
   $("content").innerHTML = { home, tasks, schedule, invites, directory }[S.view]();
 }
@@ -321,9 +387,12 @@ function directory() {
   }).join("") + "</div>";
 }
 
-const onboard = () => `<h1>Welcome!</h1><p class="hint">Create a group, or join one with a code from a teammate.</p><div class="dir">
-  <form class="person" data-form="create"><header>Create a group</header><label class="field"><span>Group name</span><input name="name" required></label><button class="btn">Create group</button></form>
-  <form class="person" data-form="join"><header>Join a group</header><label class="field"><span>Invite code</span><input name="code" required></label><button class="btn btn-quiet">Join group</button></form></div>`;
+const onboard = () => `<div class="workspace-head"><h1>Your workspace</h1><p class="hint">Choose a group, create one, or join your teammates with an invite code.</p></div>
+  ${S.groups.length ? `<div class="workspace-list">${S.groups.map((g) => `<button type="button" class="workspace-item" data-pickgroup="${esc(g.id)}"><span class="workspace-badge">${esc(g.name.charAt(0).toUpperCase())}</span><span class="workspace-info"><strong>${esc(g.name)}</strong><small>Invite code: ${esc(g.code)}</small></span><span aria-hidden="true">›</span></button>`).join("")}</div>` : `<p class="workspace-empty">You're not part of any group yet. Start one below!</p>`}
+  <div class="dir workspace-forms">
+    <form class="person" data-form="create"><header>Create a group</header><label class="field"><span>Group name</span><input name="name" maxlength="100" placeholder="e.g. Thesis team" required></label><button class="btn">Create group</button></form>
+    <form class="person" data-form="join"><header>Join a group</header><label class="field"><span>6-character invite code</span><input name="code" maxlength="6" placeholder="e.g. a1b2c3" required></label><button class="btn btn-quiet">Join group</button></form>
+  </div>`;
 
 /* ---------- actions ---------- */
 $("nav").onclick = (e) => { const b = e.target.closest("[data-go]"); if (b) { S.view = b.dataset.go; draw(); } };
@@ -339,10 +408,14 @@ async function moveTask(id, cid) {
 }
 
 $("content").onclick = async (e) => {
-  const t = e.target.closest("[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
+  const t = e.target.closest("[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
   if (!t) return;
   const ds = t.dataset;
-  if (ds.m) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + +ds.m, 1); draw(); if (S.gtoken) { await gload(); draw(); } }
+  if (ds.pickgroup) {
+    const chosen = S.groups.find((g) => g.id === ds.pickgroup);
+    if (chosen) await selectGroup(chosen);
+  }
+  else if (ds.m) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + +ds.m, 1); draw(); if (S.gtoken) { await gload(); draw(); } }
   else if (ds.act === "gconnect") gconnect();
   else if (ds.del) { if (!fail(await db.from("tasks").delete().eq("id", ds.del))) load(true); }
   else if (ds.addcol !== undefined) {
@@ -368,7 +441,7 @@ $("content").onchange = async (e) => {
   if (d.move) return moveTask(d.move, e.target.value);
   if (d.gcal !== undefined) {
     const id = e.target.value || null;
-    if (fail(await db.from("groups").update({ gcal_id: id }).eq("id", S.group.id))) return;
+    if (fail(await db.rpc("set_group_calendar", { gid: S.group.id, calendar_id: id }))) return;
     S.group.gcal_id = id;
     await gload();
     return draw();
@@ -446,7 +519,13 @@ $("content").onsubmit = async (e) => {
   else if (f.dataset.form === "join") r = await db.rpc("join_group", { gcode: v.code });
   else if (f.dataset.form === "invite") return sendInvite(f, v);
   if (r.error) return alert(r.error.message);
-  if (["create", "join"].includes(f.dataset.form)) return boot({ user: S.user });
+  if (["create", "join"].includes(f.dataset.form)) {
+    const groupId = r.data;
+    await refreshGroups();
+    const target = S.groups.find((g) => g.id === groupId);
+    if (target) return selectGroup(target);
+    return showGroupPicker();
+  }
   f.reset();
   load(true);
 };
@@ -462,6 +541,10 @@ try { setMini(localStorage.getItem("pm-mini") === "1"); } catch { setMini(false)
 $("side-toggle").onclick = () => setMini(!shell.classList.contains("mini"));
 
 let ready = false;
-db.auth.onAuthStateChange((_e, s) => {
-  if (!ready || (s?.user?.id || null) !== (S.user?.id || null)) { ready = true; boot(s); }
+db.auth.onAuthStateChange((_e, session) => {
+  if (!ready || (session?.user?.id || null) !== (S.user?.id || null)) {
+    ready = true;
+    // Avoid doing database calls synchronously inside auth state change.
+    setTimeout(() => boot(session).catch((err) => alert(err.message)), 0);
+  }
 });

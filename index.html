@@ -1,11 +1,49 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Project Manager</title>
-  </head>
-  <body>
-    <h1>hello, it works 🎉</h1>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="auth-page" class="page" hidden>
+    <section class="card">
+      <h1 class="title">Project Manager</h1>
+      <p class="subtitle">Plan together, wherever you are.</p>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab is-active" id="tab-signin" role="tab" aria-selected="true">Sign in</button>
+        <button type="button" class="tab" id="tab-signup" role="tab" aria-selected="false">Create account</button>
+      </div>
+      <form id="auth-form" class="form">
+        <label class="field"><span>Email</span><input type="email" id="email" autocomplete="email" required></label>
+        <label class="field"><span>Password</span><input type="password" id="password" autocomplete="current-password" minlength="6" required></label>
+        <button type="submit" class="btn" id="submit-btn">Sign in</button>
+      </form>
+      <p id="message" class="message" role="status" hidden></p>
+    </section>
+  </main>
+
+  <div id="app-view" class="shell" hidden>
+    <aside class="side">
+      <p class="brand">Project Manager</p>
+      <p class="group"><strong id="group-name"></strong><span id="group-code"></span></p>
+      <nav id="nav">
+        <button type="button" data-go="home">Home</button>
+        <button type="button" data-go="tasks">Tasks</button>
+        <button type="button" data-go="schedule">Schedule</button>
+        <button type="button" data-go="directory">Directory</button>
+      </nav>
+      <p id="who" class="who"></p>
+      <button type="button" class="btn btn-quiet" id="signout-btn">Sign out</button>
+    </aside>
+    <main id="content" class="content"></main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="app.js"></script>
+</body>
 </html>

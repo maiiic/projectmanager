@@ -1,10 +1,10 @@
 // Paste your Supabase project URL and anon (public) key. Never use the service_role key here.
-const SUPABASE_URL = "PASTE_YOUR_PROJECT_URL_HERE";
-const SUPABASE_ANON_KEY = "PASTE_YOUR_ANON_KEY_HERE";
+const SUPABASE_URL = "https://yginexyfrteirmwdegnx.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_SnDADsUXfW1THjWNQstWGQ_8iseB7bW";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Google Calendar: paste your OAuth "Web application" client ID (see setup steps).
-const GOOGLE_CLIENT_ID = "PASTE_YOUR_GOOGLE_CLIENT_ID_HERE";
+const GOOGLE_CLIENT_ID = "521306182221-jgur5pekktg4vi3mf2o3e7u49uur6vic.apps.googleusercontent.com";
 const GSCOPES = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events";
 
 const $ = (id) => document.getElementById(id);

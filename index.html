@@ -11,10 +11,10 @@
 </head>
 <body>
   <main id="auth-page" class="page" hidden>
-    <section class="card">
+    <section class="card auth-card">
       <h1 class="title">Project Manager</h1>
       <p class="subtitle">Plan together, wherever you are.</p>
-      <div class="tabs" role="tablist">
+      <div class="tabs" role="tablist" aria-label="Sign in or sign up">
         <button type="button" class="tab is-active" id="tab-signin" role="tab" aria-selected="true">Sign in</button>
         <button type="button" class="tab" id="tab-signup" role="tab" aria-selected="false">Create account</button>
       </div>
@@ -23,6 +23,13 @@
         <label class="field"><span>Password</span><input type="password" id="password" autocomplete="current-password" minlength="6" required></label>
         <button type="submit" class="btn" id="submit-btn">Sign in</button>
       </form>
+      <div class="google-login">
+        <div class="auth-divider"><span>or continue with</span></div>
+        <button type="button" id="google-login-btn" class="google-btn">
+          <svg viewBox="0 0 48 48" width="17" height="17" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.27 5.48-4.79 7.18l7.73 6C44.4 38.03 46.98 31.88 46.98 24.55z"/><path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.12.77-4.59l-7.98-6.2A23.87 23.87 0 0 0 0 24c0 3.87.93 7.52 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.8l-7.73-6c-2.15 1.45-4.92 2.3-8.17 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          Continue with Google
+        </button>
+      </div>
       <p id="message" class="message" role="status" hidden></p>
     </section>
   </main>
@@ -34,7 +41,9 @@
         <span class="lbl brand">Project Manager</span>
         <button type="button" class="icon" id="side-toggle" aria-label="Collapse sidebar" title="Collapse or expand sidebar"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3.5"/><path d="M9.5 4.5v15"/></svg></button>
       </div>
-      <p class="group lbl"><strong id="group-name"></strong><span id="group-code"></span></p>
+      <button type="button" id="group-switch-btn" class="group group-switch" title="Choose or join another group" aria-label="Choose or join another group">
+        <strong id="group-name"></strong><span id="group-code"></span><span class="group-switch-hint">Switch / join group ↗</span>
+      </button>
       <nav id="nav">
         <button type="button" data-go="home" title="Home"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/></svg><span class="lbl">Home</span></button>
         <button type="button" data-go="tasks" title="Tasks"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="16" rx="2"/><rect x="13.5" y="4" width="6.5" height="9" rx="2"/></svg><span class="lbl">Tasks</span></button>

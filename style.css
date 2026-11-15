@@ -255,3 +255,92 @@ html, body, .content { background-color: var(--bg); }
 .pc.me { box-shadow: inset 0 0 0 1px var(--u); }
 /* Make time labels compact and consistent with the mini-grid height. */
 .mg b, .mg em { height: 28px; line-height: 28px; }
+
+
+/* ===============================================================
+   COMPACT WARM-WHITE REFINEMENT
+   Warm off-white surfaces, smaller Nunito typography, tidy layout.
+   Overrides are kept together for easy editing.
+   =============================================================== */
+:root {
+  --bg: #fdfcf9;          /* very pale beige-white, not pure white */
+  --card: #fffefa;        /* warm-white cards */
+  --fill: #f8f7f3;        /* warm-gray input fields */
+  --line: #eeece6;
+  --ink: #263039;
+  --ink-soft: #718087;
+  --sand: #f7f4ec;
+  --r: 16px;
+  --gap: 13px;
+  --sh: 0 1px 3px rgba(54, 48, 34, .035);
+}
+html { font-size: 14px; }
+body { font-family: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif; font-size: .94rem; line-height: 1.42; background: var(--bg); }
+h1, .title { font-size: 1.55rem; font-weight: 800; line-height: 1.2; }
+h2 { font-size: 1rem; font-weight: 800; margin-bottom: 11px; }
+h3 { font-size: .94rem; }
+small, .hint, .subtitle { font-size: .85rem; }
+.subtitle { margin-bottom: 17px; }
+.hint { margin: 3px 0 16px; }
+.content { background: var(--bg); padding: 25px 28px; }
+.side { background: #fffefa; gap: 15px; padding: 18px 14px; }
+.brand { font-size: .97rem; line-height: 1.2; }
+.logo { width: 35px; height: 35px; border-radius: 12px; }
+.group { padding: 10px 13px; border-radius: 15px; font-size: .8rem; background: var(--fill); }
+#nav { gap: 4px; }
+#nav button { height: 39px; padding: 0 13px; gap: 11px; font-size: .89rem; font-weight: 700; }
+.ic { width: 17px; height: 17px; }
+.who { font-size: .76rem; }
+.panel { padding: 17px; border: 1px solid var(--line); box-shadow: none; }
+.card { padding: 25px 23px; background: var(--card); border-radius: 20px; box-shadow: var(--sh); }
+.btn { height: 36px; padding: 0 17px; font-size: .86rem; font-weight: 800; }
+.btn-quiet { background: var(--sand); }
+.icon { width: 31px; height: 31px; font-size: .86rem; }
+input, select { height: 36px; padding-left: 14px; padding-right: 14px; font-size: .86rem; background-color: var(--fill); }
+select { padding-right: 32px; background-position: right 12px center; }
+textarea { font-size: .86rem; padding: 10px 14px; }
+.field { font-size: .85rem; gap: 5px; }
+.tabs { gap: 18px; margin-bottom: 16px; }
+.tab { font-size: .88rem; }
+.bar { gap: 12px; }
+.actions { gap: 8px; }
+.stats { gap: 12px; margin-bottom: 12px; }
+.stat { padding: 13px 16px; }
+.stat b { font-size: 1.65rem; }
+.stat span { font-size: .78rem; }
+.home, .stack, .dir, .members { gap: 12px; }
+.row { padding: 9px 13px; border-radius: 13px; }
+.cal i { min-height: 73px; border-radius: 11px; font-size: .74rem; }
+.cal b, .chip { font-size: .73rem; }
+.load { font-size: .82rem; }
+/* Task entry wrapper stays a rounded rectangle, NOT a capsule. */
+.addtask { padding: 13px; gap: 9px; margin-bottom: 13px; border-radius: 15px; background: var(--card); border: 1px solid var(--line); box-shadow: none; }
+.addtask input, .addtask select, .addtask .btn { height: 36px; border-radius: 999px; }
+.board { gap: 12px; grid-auto-columns: minmax(260px, 1fr); }
+.col { padding: 12px; min-height: 145px; border-radius: 17px; }
+.col h2 { font-size: .94rem; margin-bottom: 10px; }
+.colname { font-size: .93rem; height: 32px; font-weight: 800; }
+.col h2 .icon { width: 26px; height: 26px; }
+.col .empty { padding: 12px 13px; font-size: .85rem; }
+.tcard { padding: 12px 13px; border-radius: 14px; box-shadow: 0 1px 3px rgba(54,48,34,.04); }
+.tcard p { font-size: .89rem; margin-bottom: 8px; }
+.meta select { height: 29px; font-size: .76rem; }
+.pill, .tag { font-size: .72rem; height: 22px; }
+.person { padding: 16px; border-radius: 16px; }
+.person header { padding: 9px 12px; border-radius: 12px; }
+.tbl { font-size: .82rem; }
+.tbl th { font-size: .75rem; }
+.tbl td { padding: 10px; }
+.best .tag { height: 32px; font-size: .8rem; padding: 0 13px; }
+.g h3 { font-size: .85rem; height: 30px; }
+.g { font-size: .7rem; }
+.ov .c { font-size: .68rem; border-radius: 8px; }
+.pc { padding: 14px; border-radius: 16px; }
+.mg { gap: 4px; }
+.mg .c { height: 26px; line-height: 24px; border-radius: 8px; }
+.mg b, .mg em { height: 26px; line-height: 26px; }
+@media (max-width: 860px) {
+  .content { padding: 18px 13px; }
+  .side, .mini .side { padding: 12px; }
+  #nav button { height: 37px; }
+}

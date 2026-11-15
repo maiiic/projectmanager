@@ -1,13 +1,17 @@
 // Paste your Supabase project URL and anon (public) key. Never use the service_role key here.
-const SUPABASE_URL = "https://yginexyfrteirmwdegnx.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_SnDADsUXfW1THjWNQstWGQ_8iseB7bW";
+const SUPABASE_URL = "PASTE_YOUR_PROJECT_URL_HERE";
+const SUPABASE_ANON_KEY = "PASTE_YOUR_ANON_KEY_HERE";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Google Calendar: paste your OAuth "Web application" client ID (see setup steps).
+const GOOGLE_CLIENT_ID = "PASTE_YOUR_GOOGLE_CLIENT_ID_HERE";
+const GSCOPES = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = (n) => String(n).padStart(2, "0");
 const now = new Date();
-const S = { user: null, group: null, members: [], tasks: [], busy: [], meetings: [], mine: new Set(), dirty: false, view: "home", month: new Date(now.getFullYear(), now.getMonth(), 1), sub: false };
+const S = { user: null, group: null, members: [], tasks: [], busy: [], meetings: [], mine: new Set(), dirty: false, view: "home", month: new Date(now.getFullYear(), now.getMonth(), 1), sub: false, cols: [], doneIds: new Set(), dragging: false, gtoken: null, gcals: [], gevents: [], gerr: "" };
 const DAYS = ["M", "T", "W", "Th", "F", "S"], SLOTS = 32, PR = ["", "Low", "Medium", "High"];
 const FIELDS = [["role", "Role"], ["full_name", "Full name"], ["id_number", "ID number"], ["address", "Address"], ["contact", "Contact no."], ["discord", "Discord handle"], ["birthday", "Birthday", "date"]];
 
@@ -17,7 +21,10 @@ const left = (t) => (t.due ? Math.round((new Date(t.due + "T00:00") - today()) /
 const urgent = (a, b) => left(a) - left(b) || b.priority - a.priority;
 const dueLabel = (t) => { const d = left(t); return !t.due ? "No date" : d < 0 ? `${-d}d overdue` : d === 0 ? "Due today" : d === 1 ? "Due tomorrow" : `In ${d} days`; };
 const who = (t) => nm(S.members.find((p) => p.id === t.assignee));
-const tl = (i) => { const m = 480 + 30 * i, h = Math.floor(m / 60); return `${((h + 11) % 12) + 1}:${m % 60 ? "30" : "00"} ${h < 12 ? "AM" : "PM"}`; };
+const isDone = (t) => S.doneIds.has(t.column_id);
+const FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const tl = (i) => { const m = 480 + 30 * i, h = Math.floor(m / 60) % 24; return `${((h + 11) % 12) + 1}:${m % 60 ? "30" : "00"} ${h < 12 ? "AM" : "PM"}`; };
+const th = (i) => tl(i).replace(":00", "");
 
 /* ---------- sign in ---------- */
 let mode = "signin";
@@ -68,7 +75,7 @@ async function boot(session) {
   $("app-view").hidden = !S.user;
   if (!S.user) { S.group = null; return; }
   $("who").textContent = S.user.email;
-  const { data, error } = await db.from("group_members").select("groups(id,name,code)").eq("user_id", S.user.id).limit(1);
+  const { data, error } = await db.from("group_members").select("groups(id,name,code,gcal_id)").eq("user_id", S.user.id).limit(1);
   if (error) return alert(error.message);
   S.group = data[0]?.groups || null;
   $("nav").hidden = !S.group;
@@ -87,19 +94,21 @@ async function load(force) {
     db.from("tasks").select("*").eq("group_id", g),
     db.from("availability").select("user_id,day,slot").eq("group_id", g),
     db.from("meetings").select("*").eq("group_id", g),
+    db.from("task_columns").select("*").eq("group_id", g).order("position"),
   ]);
   const bad = r.find((x) => x.error);
   if (bad) return alert(bad.error.message);
   S.members = r[0].data.map((x) => x.profiles).filter(Boolean);
-  [S.tasks, S.busy, S.meetings] = [r[1].data, r[2].data, r[3].data];
+  [S.tasks, S.busy, S.meetings, S.cols] = [r[1].data, r[2].data, r[3].data, r[4].data];
+  S.doneIds = new Set(S.cols.filter((c) => c.is_done).map((c) => c.id));
   if (!S.dirty) S.mine = new Set(S.busy.filter((x) => x.user_id === S.user.id).map((x) => `${x.day}-${x.slot}`));
-  if (force || !document.activeElement?.closest("#content form")) draw();
+  if (force || !(S.dragging || document.activeElement?.matches("#content input, #content select, #content textarea"))) draw();
 }
 
 /* ---------- views ---------- */
 function draw() {
   document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("is-active", b.dataset.go === S.view));
-  $("content").innerHTML = { home, tasks, schedule, directory }[S.view]();
+  $("content").innerHTML = { home, tasks, schedule, invites, directory }[S.view]();
 }
 
 function calendar() {
@@ -111,61 +120,195 @@ function calendar() {
     const iso = `${y}-${pad(m + 1)}-${pad(i)}`;
     const ev = [
       ...S.meetings.filter((x) => new Date(x.starts_at).toLocaleDateString("en-CA") === iso).map((x) => [x.title, "m"]),
-      ...S.tasks.filter((x) => x.due === iso && x.status !== "done").map((x) => [x.title, ""]),
+      ...S.gevents.filter((x) => x.day === iso && !S.meetings.some((m) => m.gcal_event_id === x.id)).map((x) => [x.title, "g"]),
+      ...S.tasks.filter((x) => x.due === iso && !isDone(x)).map((x) => [x.title, ""]),
     ];
     h += `<i class="${iso === t0 ? "today" : ""}">${i}${ev.slice(0, 2).map(([a, c]) => `<span class="chip ${c}">${esc(a)}</span>`).join("")}${ev.length > 2 ? `<small>+${ev.length - 2} more</small>` : ""}</i>`;
   }
-  return h + "</div>";
+  return h + `</div><p class="legend"><span><i class="dot c3"></i>Due dates</span><span><i class="dot c2"></i>Meetings</span><span><i class="dot c0"></i>Google Calendar</span></p>`;
 }
 
 function home() {
-  const open = S.tasks.filter((t) => t.status !== "done").sort(urgent);
+  const done = S.tasks.filter(isDone);
+  const open = S.tasks.filter((t) => !isDone(t)).sort(urgent);
   const late = open.filter((t) => left(t) < 0).length;
+  const week = open.filter((t) => left(t) >= 0 && left(t) <= 7).length;
+  const pct = S.tasks.length ? Math.round((done.length / S.tasks.length) * 100) : 0;
+  const legend = S.cols.map((c, i) => `<span><i class="dot c${i % 5}"></i>${esc(c.name)} ${S.tasks.filter((t) => t.column_id === c.id).length}</span>`).join("");
   const me = S.members.find((p) => p.id === S.user.id);
-  return `<h1>Hi, ${esc(nm(me))}!</h1><p class="hint">${open.length} open tasks, ${late} overdue</p>
-  <div class="home"><section class="panel">${calendar()}</section>
-  <aside class="panel"><h2>Most pressing</h2>${open.slice(0, 6).map((t) => `<div class="row"><div><b>${esc(t.title)}</b><small>${esc(who(t))}</small></div><span class="due ${left(t) < 0 ? "late" : ""}">${dueLabel(t)}</span></div>`).join("") || '<p class="empty">Nothing due. Add a task to get started.</p>'}</aside></div>`;
+  const load = S.members.map((p) => [nm(p), open.filter((t) => t.assignee === p.id).length]);
+  const unassigned = open.filter((t) => !t.assignee).length;
+  if (unassigned) load.push(["Unassigned", unassigned]);
+  const top = Math.max(1, ...load.map((x) => x[1]));
+  const meets = S.meetings.filter((x) => new Date(x.starts_at) >= new Date()).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)).slice(0, 3);
+  return `<h1>Hi, ${esc(nm(me))}!</h1><p class="hint">Here’s where the project stands.</p>
+  <div class="stats">
+    <div class="stat s1"><b>${open.length}</b><span>Open tasks</span></div>
+    <div class="stat s2"><b>${week}</b><span>Due in 7 days</span></div>
+    <div class="stat s3"><b>${late}</b><span>Overdue</span></div>
+    <div class="stat s4"><b>${pct}%</b><span>Completed</span></div>
+  </div>
+  <section class="panel prog"><h2>Overall progress <small>${done.length} of ${S.tasks.length} tasks done</small></h2>
+    <progress max="${Math.max(S.tasks.length, 1)}" value="${done.length}"></progress>
+    <p class="legend">${legend}</p></section>
+  <div class="home"><section class="panel">${gbar()}${calendar()}</section>
+  <div class="stack">
+    <aside class="panel"><h2>Most pressing</h2>${open.slice(0, 5).map((t) => `<div class="row"><div><b>${esc(t.title)}</b><small>${esc(who(t))}</small></div><span class="due ${left(t) < 0 ? "late" : ""}">${dueLabel(t)}</span></div>`).join("") || '<p class="empty">Nothing due. Add a task to get started.</p>'}</aside>
+    <aside class="panel"><h2>Team workload <small>open tasks</small></h2>${load.map(([n, c]) => `<div class="load"><span>${esc(n)}</span><progress class="work" max="${top}" value="${c}"></progress><b>${c}</b></div>`).join("")}</aside>
+    <aside class="panel"><h2>Upcoming meetings</h2>${meets.map((x) => `<div class="row"><div><b>${esc(x.title)}</b></div><span class="due">${new Date(x.starts_at).toLocaleString("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></div>`).join("") || '<p class="empty">No meetings scheduled yet.</p>'}</aside>
+  </div></div>`;
 }
 
-const card = (t) => `<article class="tcard"><p>${esc(t.title)}</p>
-  <div class="meta"><span class="pill p${t.priority}">${PR[t.priority]}</span><span class="due ${left(t) < 0 && t.status !== "done" ? "late" : ""}">${dueLabel(t)}</span></div>
+const card = (t) => `<article class="tcard" draggable="true" data-id="${t.id}"><p>${esc(t.title)}</p>
+  <div class="meta"><span class="pill p${t.priority}">${PR[t.priority]}</span><span class="due ${left(t) < 0 && !isDone(t) ? "late" : ""}">${dueLabel(t)}</span></div>
   <div class="meta"><small>${esc(who(t))}</small>
-  <select data-status="${t.id}" aria-label="Status">${[["todo", "To do"], ["doing", "In progress"], ["done", "Done"]].map(([k, l]) => `<option value="${k}"${t.status === k ? " selected" : ""}>${l}</option>`).join("")}</select>
+  <select class="st${S.cols.findIndex((c) => c.id === (t.column_id || S.cols[0].id)) % 5}" data-move="${t.id}" aria-label="Status">${S.cols.map((c) => `<option value="${c.id}"${(t.column_id || S.cols[0].id) === c.id ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
   <button type="button" class="icon" data-del="${t.id}" aria-label="Delete task">✕</button></div></article>`;
 
 function tasks() {
   const opts = S.members.map((p) => `<option value="${p.id}">${esc(nm(p))}</option>`).join("");
-  return `<h1>Tasks</h1><form class="addtask" data-form="task"><input name="title" placeholder="New task" required>
+  return `<div class="bar"><div><h1>Tasks</h1><p class="hint">Sorted by due date, then priority. Drag cards between columns, or click a column name to rename it.</p></div>
+  <button type="button" class="btn btn-quiet" data-addcol>+ Add column</button></div>
+  <form class="addtask" data-form="task"><input name="title" placeholder="New task" required>
   <input name="due" type="date" aria-label="Due date"><select name="priority" aria-label="Priority"><option value="3">High</option><option value="2" selected>Medium</option><option value="1">Low</option></select>
   <select name="assignee" aria-label="Assignee"><option value="">Unassigned</option>${opts}</select><button class="btn">Add task</button></form>
-  <p class="hint">Sorted by due date, then priority.</p><div class="board">` +
-    [["todo", "To do"], ["doing", "In progress"], ["done", "Done"]].map(([k, l]) => {
-      const list = S.tasks.filter((t) => t.status === k).sort(urgent);
-      return `<section class="col ${k}"><h2>${l} <small>${list.length}</small></h2>${list.map(card).join("") || '<p class="empty">Nothing here</p>'}</section>`;
-    }).join("") + "</div>";
+  <div class="board">` + S.cols.map((c, i) => {
+    const list = S.tasks.filter((t) => t.column_id === c.id || (!t.column_id && i === 0)).sort(urgent);
+    return `<section class="col" data-cid="${c.id}"><h2><input class="colname" data-rename="${c.id}" value="${esc(c.name)}" aria-label="Column name"><small>${list.length}</small>${list.length ? "" : `<button type="button" class="icon" data-delcol="${c.id}" aria-label="Delete empty column">✕</button>`}</h2>${list.map(card).join("") || '<p class="empty">Drop tasks here</p>'}</section>`;
+  }).join("") + "</div>";
+}
+
+function bestTimes(B) {
+  const free = (d, s) => S.members.every((p) => !B[p.id]?.has(`${d}-${s}`));
+  const out = [];
+  for (let d = 0; d < 6; d++) {
+    for (let s = 0; s < SLOTS; ) {
+      if (!free(d, s)) { s++; continue; }
+      let e = s;
+      while (e < SLOTS && free(d, e)) e++;
+      if (e - s >= 2) out.push({ d, s, e });
+      s = e;
+    }
+  }
+  return out.sort((a, b) => b.e - b.s - (a.e - a.s) || a.d - b.d || a.s - b.s).slice(0, 6);
 }
 
 function schedule() {
   const B = {};
   S.busy.forEach((r) => (B[r.user_id] ??= new Set()).add(`${r.day}-${r.slot}`));
   const n = S.members.length, hd = DAYS.map((d) => `<b>${d}</b>`).join("");
-  let ov = `<div class="g ov"><h3>Free together</h3><span></span>${hd}`;
+  const first = (p) => nm(p).split(" ")[0];
+  const best = S.busy.length ? bestTimes(B) : [];
+  const label = (free) => free.length === n ? "All" : !free.length ? "" : free.length <= n / 2 ? free.map(first).join(", ") : "All but " + S.members.filter((p) => !free.includes(p)).map(first).join(", ");
+  let ov = `<div class="g ov"><span></span>${FULL.map((d) => `<b>${d.slice(0, 3)}</b>`).join("")}`;
   for (let s = 0; s < SLOTS; s++) {
     ov += `<em>${tl(s)}</em>`;
     for (let d = 0; d < 6; d++) {
       const free = S.members.filter((p) => !B[p.id]?.has(`${d}-${s}`));
-      ov += `<i class="c l${Math.round((free.length / n) * 4)}" title="${esc(free.map(nm).join(", ") || "Nobody free")}">${free.length === n ? "All" : free.length || ""}</i>`;
+      ov += `<i class="c ${free.length === n ? "l4" : free.length ? "l2" : "l0"}" title="${esc(free.map(nm).join(", ") || "Nobody free")}">${esc(label(free))}</i>`;
     }
   }
   ov += "</div>";
-  const mem = S.members.map((p) => {
+  const order = [...S.members].sort((a, b) => (a.id < b.id ? -1 : 1)).map((p) => p.id);
+  const mem = [...S.members].sort((a, b) => (b.id === S.user.id) - (a.id === S.user.id)).map((p, i) => {
     const me = p.id === S.user.id, set = me ? S.mine : B[p.id] || new Set();
-    let g = `<div class="g mg${me ? " me" : ""}"><h3>${esc(nm(p))}${me ? " (you)" : ""}</h3>${hd}`;
-    for (let s = 0; s < SLOTS; s++) for (let d = 0; d < 6; d++) g += `<i class="c${set.has(`${d}-${s}`) ? " x" : ""}"${me ? ` data-d="${d}" data-s="${s}"` : ""}></i>`;
-    return g + "</div>";
+    let g = `<div class="panel pc u${order.indexOf(p.id) % 5}${me ? " me" : ""}"><div class="g mg${me ? " me" : ""}"><h3><span class="av c${order.indexOf(p.id) % 5}">${esc(nm(p)[0].toUpperCase())}</span>${esc(nm(p))}${me ? " (you)" : ""}<small>${set.size / 2} hrs busy</small></h3><span></span>${hd}`;
+    for (let s = 0; s < SLOTS; s++) {
+      g += `<em>${s % 2 ? "" : th(s)}</em>`;
+      for (let d = 0; d < 6; d++) g += `<i class="c${set.has(`${d}-${s}`) ? " x" : ""}"${me ? ` data-d="${d}" data-s="${s}"` : ""}></i>`;
+    }
+    return g + "</div></div>";
   }).join("");
-  return `<div class="bar"><h1>Schedule</h1><p>Click the boxes where you're busy, then save.</p><button type="button" class="btn" data-act="save">Save my availability</button></div>
-  <div class="sched"><div class="hscroll">${ov}</div><div class="hscroll members">${mem}</div></div>`;
+  return `<div class="bar"><div><h1>Schedule</h1><p class="hint" id="sv-hint">${S.dirty ? "Unsaved changes. Don’t forget to save." : "Drag across the boxes where you’re busy, then save."}</p></div>
+  <div class="actions"><button type="button" class="btn btn-quiet" data-act="clear">Clear mine</button><button type="button" class="btn" data-act="save">Save availability</button></div></div>
+  <section class="panel best"><h2>Best times to meet <small>everyone free for 1+ hour</small></h2><div class="bests">${best.map((x) => `<span class="tag"><b>${FULL[x.d]}</b> ${tl(x.s)} – ${tl(x.e)} <small>${(x.e - x.s) / 2} hr</small></span>`).join("") || `<p class="empty">${S.busy.length ? "No time works for everyone yet." : "Nobody has saved their availability yet."}</p>`}</div></section>
+  <section class="panel"><h2>Free together <small>names show who is free, hover for the full list</small></h2><div class="hscroll">${ov}</div>
+  <p class="legend"><span><i class="dot l0"></i>Nobody free</span><span><i class="dot l2"></i>Some free</span><span><i class="dot l4"></i>Everyone free</span></p></section>
+  <h2 class="sub">Everyone’s availability</h2><div class="members">${mem}</div>`;
+}
+
+/* ---------- Google Calendar ---------- */
+async function gapi(path, opts = {}) {
+  const r = await fetch("https://www.googleapis.com/calendar/v3/" + path, { ...opts, headers: { Authorization: "Bearer " + S.gtoken, "Content-Type": "application/json" } });
+  if (r.status === 401) { S.gtoken = null; throw new Error("Google session expired. Click Connect Google Calendar again."); }
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error?.message || "Google Calendar error");
+  return j;
+}
+
+function gconnect() {
+  if (GOOGLE_CLIENT_ID.startsWith("PASTE")) return alert("Add your Google client ID at the top of app.js first.");
+  if (!window.google?.accounts?.oauth2) return alert("Google sign-in is still loading. Try again in a moment.");
+  google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID, scope: GSCOPES,
+    callback: async (r) => { if (r.error) return alert(r.error); S.gtoken = r.access_token; S.gerr = ""; await gload(); draw(); },
+  }).requestAccessToken();
+}
+
+async function gload() {
+  if (!S.gtoken) return;
+  try {
+    if (!S.gcals.length) S.gcals = (await gapi("users/me/calendarList?minAccessRole=reader")).items || [];
+    if (!S.group.gcal_id) { S.gevents = []; return; }
+    const y = S.month.getFullYear(), m = S.month.getMonth();
+    const q = new URLSearchParams({ timeMin: new Date(y, m, 1).toISOString(), timeMax: new Date(y, m + 1, 1).toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "250" });
+    const j = await gapi(`calendars/${encodeURIComponent(S.group.gcal_id)}/events?${q}`);
+    S.gevents = (j.items || []).map((e) => ({ id: e.id, title: e.summary || "(No title)", day: e.start.date || new Date(e.start.dateTime).toLocaleDateString("en-CA") }));
+    S.gerr = "";
+  } catch (err) { S.gerr = err.message; }
+}
+
+function gbar() {
+  const opts = S.gcals.map((c) => `<option value="${esc(c.id)}"${c.id === S.group.gcal_id ? " selected" : ""}>${esc(c.summary)}</option>`).join("");
+  return `<div class="gbar">${S.gtoken
+    ? `<span class="tag p1">Google connected</span><select data-gcal aria-label="Group calendar"><option value="">Pick the group’s calendar</option>${opts}</select>`
+    : `<button type="button" class="btn" data-act="gconnect">Connect Google Calendar</button>${S.group.gcal_id ? "<small>Your group has a shared calendar. Connect to show it here.</small>" : ""}`}
+    ${S.gerr ? `<small class="bad">${esc(S.gerr)}</small>` : ""}</div>`;
+}
+
+function invites() {
+  const rows = [...S.meetings].sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
+  const cal = S.gcals.find((c) => c.id === S.group.gcal_id)?.summary || "your primary calendar";
+  const when = (x) => { const a = new Date(x.starts_at), b = new Date(x.ends_at); return `${a.toLocaleString("en", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} – ${b.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" })}`; };
+  return `<div class="bar"><div><h1>Invites</h1><p class="hint">${S.gtoken ? `Invites are added to ${esc(cal)} and emailed to everyone below.` : "Connect Google Calendar on the Home page to send invites."}</p></div></div>
+  <form class="panel inv" data-form="invite" novalidate>
+    <div class="inv-grid">
+      <label class="field"><span>Title</span><input name="title"></label>
+      <label class="field"><span>Date</span><input name="date" type="date"></label>
+      <label class="field"><span>Start</span><input name="start" type="time"></label>
+      <label class="field"><span>End</span><input name="end" type="time"></label>
+    </div>
+    <label class="field"><span>Description</span><textarea name="description" rows="2"></textarea></label>
+    <label class="field"><span>Emails <small>group members are added for you, one per line</small></span><textarea name="emails" rows="5">${esc(S.members.map((p) => p.email).join("\n"))}</textarea></label>
+    <p id="inv-msg" class="message" role="status" hidden></p>
+    <div class="actions"><button class="btn">Send invites</button></div>
+  </form>
+  <section class="panel"><h2>Scheduled meetings <small>${rows.length}</small></h2>${rows.length ? `<div class="hscroll"><table class="tbl"><thead><tr><th>Status</th><th>Meeting</th><th>Date &amp; time</th><th>People emailed</th></tr></thead><tbody>${rows.map((x) => `<tr><td><span class="pill p1">Sent</span></td><td>${esc(x.title)}</td><td>${esc(when(x))}</td><td title="${esc((x.emails || []).join(", "))}">${(x.emails || []).length} people</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">No meetings scheduled yet.</p>'}</section>`;
+}
+
+async function sendInvite(f, v) {
+  const say = (t, bad) => { const m = $("inv-msg"); m.textContent = t; m.hidden = !t; m.classList.toggle("is-error", !!bad); };
+  const list = [...new Set(v.emails.split(/[\s,;]+/).filter(Boolean).map((x) => x.toLowerCase()))];
+  const badMail = list.filter((x) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
+  const start = new Date(`${v.date}T${v.start}`), end = new Date(`${v.date}T${v.end}`);
+  const problems = [];
+  if (!v.title.trim()) problems.push("Add a title.");
+  if (!v.date || !v.start || !v.end || isNaN(start) || isNaN(end)) problems.push("Pick a date, start time, and end time.");
+  else if (end <= start) problems.push("The end time must be after the start time.");
+  if (!list.length) problems.push("Add at least one email.");
+  if (badMail.length) problems.push(`Fix these emails: ${badMail.join(", ")}.`);
+  if (!S.gtoken) problems.push("Connect Google Calendar first (on the Home page).");
+  if (problems.length) return say("Not sent. " + problems.join(" "), true);
+  say("Sending invites…");
+  try {
+    const cal = encodeURIComponent(S.group.gcal_id || "primary");
+    const ev = await gapi(`calendars/${cal}/events?sendUpdates=all`, { method: "POST", body: JSON.stringify({ summary: v.title.trim(), description: v.description.trim(), start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() }, attendees: list.map((email) => ({ email })) }) });
+    const r = await db.from("meetings").insert({ group_id: S.group.id, title: v.title.trim(), starts_at: start.toISOString(), ends_at: end.toISOString(), description: v.description.trim() || null, emails: list, status: "sent", gcal_event_id: ev.id });
+    if (fail(r)) return;
+    f.reset();
+    await load(true);
+    say(`Invites sent to ${list.length} ${list.length === 1 ? "person" : "people"}.`);
+  } catch (err) { say("Not sent. " + err.message, true); }
 }
 
 function directory() {
@@ -185,18 +328,34 @@ const onboard = () => `<h1>Welcome!</h1><p class="hint">Create a group, or join 
 /* ---------- actions ---------- */
 $("nav").onclick = (e) => { const b = e.target.closest("[data-go]"); if (b) { S.view = b.dataset.go; draw(); } };
 
+const fail = (r) => r.error && (alert(r.error.message), true);
+
+async function moveTask(id, cid) {
+  const t = S.tasks.find((x) => x.id === id);
+  if (!t || t.column_id === cid) return;
+  t.column_id = cid;
+  draw();
+  if (fail(await db.from("tasks").update({ column_id: cid }).eq("id", id))) load(true);
+}
+
 $("content").onclick = async (e) => {
-  const t = e.target.closest("[data-m],[data-d],[data-del],[data-act]");
+  const t = e.target.closest("[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
   if (!t) return;
   const ds = t.dataset;
-  if (ds.m) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + +ds.m, 1); draw(); }
-  else if (ds.d !== undefined) { const k = `${ds.d}-${ds.s}`; S.mine.has(k) ? S.mine.delete(k) : S.mine.add(k); S.dirty = true; t.classList.toggle("x"); }
-  else if (ds.del) { const r = await db.from("tasks").delete().eq("id", ds.del); if (r.error) return alert(r.error.message); load(true); }
+  if (ds.m) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + +ds.m, 1); draw(); if (S.gtoken) { await gload(); draw(); } }
+  else if (ds.act === "gconnect") gconnect();
+  else if (ds.del) { if (!fail(await db.from("tasks").delete().eq("id", ds.del))) load(true); }
+  else if (ds.addcol !== undefined) {
+    const position = Math.max(-1, ...S.cols.map((c) => c.position)) + 1;
+    if (!fail(await db.from("task_columns").insert({ group_id: S.group.id, name: "New column", position }))) load(true);
+  }
+  else if (ds.delcol) { if (!fail(await db.from("task_columns").delete().eq("id", ds.delcol))) load(true); }
+  else if (ds.act === "clear") { S.mine = new Set(); S.dirty = true; draw(); }
   else if (ds.act === "save") {
     const g = S.group.id, uid = S.user.id;
     let r = await db.from("availability").delete().eq("group_id", g).eq("user_id", uid);
     if (!r.error && S.mine.size) r = await db.from("availability").insert([...S.mine].map((k) => { const [day, slot] = k.split("-"); return { group_id: g, user_id: uid, day: +day, slot: +slot }; }));
-    if (r.error) return alert(r.error.message);
+    if (fail(r)) return;
     S.dirty = false;
     await load(true);
     const b = document.querySelector("[data-act=save]");
@@ -205,26 +364,102 @@ $("content").onclick = async (e) => {
 };
 
 $("content").onchange = async (e) => {
-  const id = e.target.dataset.status;
-  if (!id) return;
-  const r = await db.from("tasks").update({ status: e.target.value }).eq("id", id);
-  if (r.error) return alert(r.error.message);
-  load(true);
+  const d = e.target.dataset;
+  if (d.move) return moveTask(d.move, e.target.value);
+  if (d.gcal !== undefined) {
+    const id = e.target.value || null;
+    if (fail(await db.from("groups").update({ gcal_id: id }).eq("id", S.group.id))) return;
+    S.group.gcal_id = id;
+    await gload();
+    return draw();
+  }
+  if (d.rename) {
+    const name = e.target.value.trim();
+    if (name) fail(await db.from("task_columns").update({ name }).eq("id", d.rename));
+    load(true);
+  }
 };
+
+$("content").onkeydown = (e) => { if (e.key === "Enter" && e.target.dataset.rename) e.target.blur(); };
+
+/* drag cards between columns */
+$("content").ondragstart = (e) => {
+  const t = e.target.closest?.(".tcard");
+  if (!t) return;
+  S.dragging = true;
+  e.dataTransfer.setData("text/plain", t.dataset.id);
+  e.dataTransfer.effectAllowed = "move";
+  t.classList.add("dragging");
+};
+$("content").ondragover = (e) => {
+  const col = e.target.closest?.(".col");
+  if (!col || !S.dragging) return;
+  e.preventDefault();
+  document.querySelectorAll(".col.over").forEach((x) => x !== col && x.classList.remove("over"));
+  col.classList.add("over");
+};
+$("content").ondrop = (e) => {
+  const col = e.target.closest?.(".col");
+  if (!col || !S.dragging) return;
+  e.preventDefault();
+  S.dragging = false;
+  moveTask(e.dataTransfer.getData("text/plain"), col.dataset.cid);
+};
+$("content").ondragend = () => {
+  S.dragging = false;
+  document.querySelectorAll(".dragging, .over").forEach((x) => x.classList.remove("dragging", "over"));
+};
+
+/* drag across the schedule grid to paint busy slots */
+let paint = null;
+const myCell = (el) => el?.closest?.(".mg.me .c");
+const paintCell = (c) => {
+  const k = `${c.dataset.d}-${c.dataset.s}`;
+  paint ? S.mine.add(k) : S.mine.delete(k);
+  c.classList.toggle("x", paint);
+  S.dirty = true;
+  const h = $("sv-hint");
+  if (h) h.textContent = "Unsaved changes. Don’t forget to save.";
+};
+$("content").onpointerdown = (e) => {
+  const c = myCell(e.target);
+  if (!c || e.button > 0) return;
+  e.preventDefault();
+  paint = !S.mine.has(`${c.dataset.d}-${c.dataset.s}`);
+  paintCell(c);
+};
+$("content").onpointermove = (e) => {
+  if (paint === null) return;
+  const c = myCell(document.elementFromPoint(e.clientX, e.clientY));
+  if (c) paintCell(c);
+};
+document.addEventListener("pointerup", () => { paint = null; });
+document.addEventListener("pointercancel", () => { paint = null; });
 
 $("content").onsubmit = async (e) => {
   e.preventDefault();
   const f = e.target, v = Object.fromEntries(new FormData(f));
   let r;
-  if (f.dataset.form === "task") r = await db.from("tasks").insert({ group_id: S.group.id, title: v.title.trim(), due: v.due || null, priority: +v.priority, assignee: v.assignee || null });
+  if (f.dataset.form === "task") r = await db.from("tasks").insert({ group_id: S.group.id, title: v.title.trim(), due: v.due || null, priority: +v.priority, assignee: v.assignee || null, column_id: S.cols[0]?.id });
   else if (f.dataset.form === "profile") r = await db.from("profiles").update(Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x.trim() || null]))).eq("id", S.user.id);
   else if (f.dataset.form === "create") r = await db.rpc("create_group", { gname: v.name });
   else if (f.dataset.form === "join") r = await db.rpc("join_group", { gcode: v.code });
+  else if (f.dataset.form === "invite") return sendInvite(f, v);
   if (r.error) return alert(r.error.message);
   if (["create", "join"].includes(f.dataset.form)) return boot({ user: S.user });
   f.reset();
   load(true);
 };
+
+/* sidebar: full or icons only */
+const shell = $("app-view");
+const setMini = (m) => {
+  shell.classList.toggle("mini", m);
+  $("side-toggle").setAttribute("aria-label", m ? "Expand sidebar" : "Collapse sidebar");
+  try { localStorage.setItem("pm-mini", m ? "1" : "0"); } catch { /* storage unavailable */ }
+};
+try { setMini(localStorage.getItem("pm-mini") === "1"); } catch { setMini(false); }
+$("side-toggle").onclick = () => setMini(!shell.classList.contains("mini"));
 
 let ready = false;
 db.auth.onAuthStateChange((_e, s) => {

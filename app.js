@@ -463,7 +463,7 @@ async function gapi(path, opts = {}) {
 function gconnect() {
   if (GOOGLE_CLIENT_ID.startsWith("PASTE")) return alert("Add your Google client ID at the top of app.js first.");
   if (!window.google?.accounts?.oauth2) return alert("Google sign-in is still loading. Try again in a moment.");
-  google.accounts.oauth2.initTokenClient({
+  google.accounts.oauth2.initCodeClient({
     client_id: GOOGLE_CLIENT_ID, scope: GSCOPES,
     callback: async (r) => { if (r.error) return alert(r.error); S.gtoken = r.access_token; S.gerr = ""; await gload(); draw(); },
   }).requestAccessToken();

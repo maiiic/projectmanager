@@ -1306,3 +1306,13 @@ html[data-theme="dark"] .task-event-detail .task-event-fields .task-detail-field
 html[data-theme="dark"] .time-grid > .time-event.event-chip.m { border-left-color: #E5A0A2; }
 html[data-theme="dark"] .time-grid > .time-event.event-chip.g { border-left-color: #4F94DC; }
 html[data-theme="dark"] .time-grid > .time-event.event-chip.t { border-left-color: #A58DD4; }
+
+.side {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.side .side-user {
+  margin-top: auto;
+}

@@ -313,15 +313,31 @@ function calendar() {
       h += `<span class="time-label">${clock}</span>`;
       for(const d of dates) {
         const date=dayKey(d);
-        const matches=items.map((ev,i)=>({ev,i})).filter(({ev})=>{
-          if(ev.allDay || !ev.start || ev.date!==date) return false;
-          const start=new Date(ev.start), end=ev.end?new Date(ev.end):new Date(start.getTime()+30*60000);
-          const cellStart=new Date(d.getFullYear(),d.getMonth(),d.getDate(),Math.floor(mins/60),mins%60).getTime();
-          return start.getTime()>=cellStart && start.getTime()<cellStart+30*60000;
-        });
-        h += `<div class="time-cell">${matches.map(x=>calChip(x.ev,x.i)).join('')}</div>`;
+        // Timed events are rendered as grid overlays below, so their height follows their duration.
+        h += `<div class="time-cell" aria-hidden="true"></div>`;
       }
     }
+    // Each half-hour is a CSS grid row. Place an event across ALL rows it occupies.
+    // Grid row 1 = day headers, row 2 = all-day events, row 3 = 8:00–8:30 AM.
+    dates.forEach((d, dayIndex) => {
+      const date = dayKey(d);
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      items.forEach((ev, index) => {
+        if (ev.allDay || !ev.start || ev.date !== date) return;
+        const start = new Date(ev.start).getTime();
+        const end = ev.end ? new Date(ev.end).getTime() : start + 30 * 60000;
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
+        const first = Math.max(0, (start - dayStart) / 60000 - 480);
+        const last = Math.min(960, (end - dayStart) / 60000 - 480);
+        if (last <= first) return;
+        const startSlot = Math.floor(first / 30);
+        const endSlot = Math.ceil(last / 30);
+        const topOffset = (first - startSlot * 30) / 30 * 100;
+        const bottomOffset = (endSlot * 30 - last) / 30 * 100;
+        const cls = ev.type === 'meeting' ? 'm' : ev.type === 'google' ? 'g' : '';
+        h += `<button type="button" class="chip ${cls} event-chip time-event" data-event="${index}" title="${esc(ev.title)}" style="grid-column:${dayIndex + 2};grid-row:${startSlot + 3} / span ${endSlot - startSlot};--event-top:${topOffset}%;--event-bottom:${bottomOffset}%">${esc(ev.title)}</button>`;
+      });
+    });
     h += `</div></div>`;
   }
   return h + `<p class="legend"><span><i class="dot c3"></i>Due dates</span><span><i class="dot c1"></i>Meetings</span><span><i class="dot c0"></i>Google Calendar</span></p>`;
@@ -334,7 +350,7 @@ function showEventDetails(index) {
   const meet=typeof ev.meetLink==='string' && /^https:\/\//.test(ev.meetLink)?ev.meetLink:'';
   const link=typeof ev.url==='string' && /^https:\/\//.test(ev.url)?ev.url:'';
   const controls = ev.type === 'meeting' && ev.meetingId
-    ? `<div class="event-actions"><h3>Manage meeting</h3><p class="event-action-hint">Remove only from this site, or cancel in Google Calendar and notify invitees.</p><button type="button" class="btn btn-quiet meeting-action" data-meeting-id="${esc(ev.meetingId)}" data-meeting-action="remove">Remove from site only</button>${ev.gcalEventId ? `<button type="button" class="btn meeting-cancel meeting-action" data-meeting-id="${esc(ev.meetingId)}" data-meeting-action="cancel">Cancel meeting &amp; notify guests</button>` : ''}<p class="meeting-action-status" role="status" hidden></p></div>`
+    ? `<div class="event-actions"><h3>Manage meeting</h3><p class="event-action-hint">Choose whether to remove this meeting only from the site or cancel its Google Calendar event with or without cancellation emails.</p><button type="button" class="btn btn-quiet meeting-action" data-meeting-id="${esc(ev.meetingId)}" data-meeting-action="remove">Remove from site only</button>${ev.gcalEventId ? `<button type="button" class="btn meeting-cancel meeting-action" data-meeting-id="${esc(ev.meetingId)}" data-meeting-action="cancelSilent">Cancel without sending email</button><button type="button" class="btn meeting-cancel meeting-action" data-meeting-id="${esc(ev.meetingId)}" data-meeting-action="cancel">Cancel &amp; notify guests</button>` : ''}<p class="meeting-action-status" role="status" hidden></p></div>`
     : '';
   const detail=`<div class="event-modal-backdrop" data-close-event><section class="event-detail" role="dialog" aria-modal="true" aria-label="Calendar event details"><div class="event-detail-top"><span class="event-type ${ev.type}">${ev.type==='google'?'Google Calendar':ev.type==='meeting'?'Meeting':'Task due date'}</span><button type="button" class="icon" data-close-event aria-label="Close">✕</button></div><h2>${title}</h2><p class="event-info">◷ ${period}</p>${ev.location?`<p class="event-info">⌖ ${esc(ev.location)}</p>`:''}${ev.organizer?`<p class="event-info">Organizer: ${esc(ev.organizer)}</p>`:''}${attendees?`<p class="event-info">Guests: ${esc(attendees)}</p>`:''}${ev.description?`<p class="event-description">${esc(ev.description)}</p>`:''}<div class="event-links">${meet?`<a href="${esc(meet)}" target="_blank" rel="noopener noreferrer">Join Google Meet ↗</a>`:''}${link?`<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Open in Google Calendar ↗</a>`:''}</div>${controls}</section></div>`;
   document.querySelector('.event-modal-backdrop')?.remove();
@@ -617,20 +633,23 @@ async function manageMeeting(meetingId, action) {
   const buttons = [...document.querySelectorAll('.meeting-action')];
   const meeting = S.meetings.find(m => String(m.id) === String(meetingId));
   if (!meeting) return;
-  const cancel = action === 'cancel';
+  const cancel = action === 'cancel' || action === 'cancelSilent';
+  const silent = action === 'cancelSilent';
   if (cancel && !meeting.gcal_event_id) return alert('This meeting has no Google Calendar event to cancel.');
-  const question = cancel
-    ? `Cancel “${meeting.title}” in Google Calendar and send cancellation emails to the guests? This cannot be undone.`
-    : `Remove “${meeting.title}” from the Project Manager only? The Google Calendar event and guest invitations will NOT be canceled. It may still appear as a Google Calendar event.`;
+  const question = silent
+    ? `Cancel “${meeting.title}” in Google Calendar WITHOUT requesting cancellation emails? Guests may still see changes in their calendars. This cannot be undone.`
+    : cancel
+      ? `Cancel “${meeting.title}” in Google Calendar and send cancellation emails to guests? This cannot be undone.`
+      : `Remove “${meeting.title}” from Project Manager only? The Google Calendar event and invitations will NOT be canceled, and it may still appear in the calendar.`;
   if (!confirm(question)) return;
   buttons.forEach(button => button.disabled = true);
-  if (status) { status.hidden = false; status.textContent = cancel ? 'Canceling and notifying guests…' : 'Removing from site…'; }
+  if (status) { status.hidden = false; status.textContent = silent ? 'Canceling without notification emails…' : cancel ? 'Canceling and notifying guests…' : 'Removing from site…'; }
   try {
-    await calendarBackend({action: cancel ? 'cancelMeeting' : 'removeMeeting', meetingId: String(meetingId)});
+    await calendarBackend({action: silent ? 'cancelMeetingSilent' : cancel ? 'cancelMeeting' : 'removeMeeting', meetingId: String(meetingId)});
     document.querySelector('.event-modal-backdrop')?.remove();
     await load(true);
     if (S.gtoken) { await gload(); draw(); }
-    alert(cancel ? 'Meeting canceled. Google Calendar was asked to email all guests.' : 'Meeting removed from Project Manager. Google Calendar was not changed.');
+    alert(silent ? 'Meeting canceled. Cancellation emails were not requested.' : cancel ? 'Meeting canceled. Google Calendar was asked to notify all guests.' : 'Meeting removed from Project Manager. Google Calendar was not changed.');
   } catch (error) {
     if (status) status.textContent = error.message || 'Unable to update meeting.';
     buttons.forEach(button => button.disabled = false);

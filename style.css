@@ -849,3 +849,27 @@ html[data-theme="dark"] .mrow { background: var(--butter); }
 .meeting-cancel { background:var(--blush); color:var(--blush-t); }
 .meeting-action-status { flex-basis:100%; font-size:.8rem; color:var(--ink-soft); margin:0; }
 @media(max-width:650px) { .event-actions .btn { width:100%; } }
+
+/* Duration-based calendar blocks: an event spans its full start-to-end time. */
+.time-grid > .time-event {
+  z-index:2;
+  display:block;
+  align-self:stretch;
+  justify-self:stretch;
+  min-width:0;
+  width:auto;
+  max-width:none;
+  height:auto;
+  margin:3px 4px;
+  padding:7px 9px;
+  border-radius:10px;
+  border-left-width:4px;
+  box-sizing:border-box;
+  overflow:hidden;
+  text-align:left;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  cursor:pointer;
+}
+/* Visible focus style for keyboard users. */
+.time-grid > .time-event.event-chip:focus-visible { outline:2px solid var(--sky-d); outline-offset:-2px; }

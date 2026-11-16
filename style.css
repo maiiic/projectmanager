@@ -652,100 +652,15 @@ html[data-theme="dark"] .person header { background: var(--fill); color: var(--i
   .set-foot { padding: 16px 20px; }
 }
 
-/* ===============================================================
-   Round 3: home cards, yellow meetings/today, light progress bars,
-   group dropdown, smaller logo, wider color range, meetings table.
-   =============================================================== */
-:root {
-  --orange: #fde6d3; --orange-d: #ec9a55; --orange-t: #9a4a10;
-  --red: #fde3e1; --red-d: #e86b66; --red-t: #a52a2a;
-  --yellow: #ffeaa3;
+/* Yellow-only correction: preserve all existing palette and layout rules.
+   Yellow's selected value is #ffeda8; prevent the default white blend
+   from washing out this specific swatch and its busy schedule squares. */
+.color-option:has(input[name="preferred_color"][value="#ffeda8"]) .color-swatch {
+  background: #ffeda8;
+  border-color: #ffeda8;
 }
-html[data-theme="dark"] {
-  --orange: #58402e; --orange-t: #ffd2a8; --red: #582f31; --red-t: #ffc9c6; --yellow: #574b28;
-}
-
-/* Logo: small, round and cute like the other icons */
-.logo { width: 30px; height: 30px; border-radius: 50%; background: var(--teal); color: var(--teal-t); }
-.logo .ic { width: 18px; height: 18px; }
-.brand { font-size: .98rem; }
-
-/* Calendar: today and meetings are yellow */
-.cal i.today { background: var(--butter); border-color: var(--butter-d); }
-.chip.m { background: var(--yellow); color: #6f5200; }
-.today .chip.m { background: var(--card); }
-.gbar { justify-content: flex-end; }
-
-/* Progress bars: light fills */
-progress::-webkit-progress-value { background: #a6dfce; }
-progress::-moz-progress-bar { background: #a6dfce; }
-progress.work::-webkit-progress-value { background: color-mix(in srgb, var(--u, #4f94dc) 48%, var(--card)); }
-progress.work::-moz-progress-bar { background: color-mix(in srgb, var(--u, #4f94dc) 48%, var(--card)); }
-html[data-theme="dark"] progress::-webkit-progress-value { background: #3b8c7a; }
-html[data-theme="dark"] progress::-moz-progress-bar { background: #3b8c7a; }
-
-/* Home cards */
-.panel h2 .go, .panel h2 .h2-end .go { width: 30px; height: 30px; background: var(--fill); color: var(--ink-soft); }
-.panel h2 .go .ic { width: 16px; height: 16px; }
-.h2-end { display: inline-flex; align-items: center; gap: 10px; }
-.row { position: relative; padding: 12px 16px 12px 26px; overflow: hidden; }
-.urg-bar { position: absolute; left: 10px; top: 12px; bottom: 12px; width: 4px; border-radius: 4px; background: var(--ub, var(--line)); }
-.row small { color: var(--ink-soft); }
-.row[class*="urg-"], html[data-theme="dark"] .row[class*="urg-"] { background: var(--card); border: 1px solid var(--line); }
-.row[class*="urg-"] .due { display: inline-flex; align-items: center; height: 26px; padding: 0 12px; border-radius: 999px; background: var(--pb); color: var(--pt); font-size: .78rem; font-weight: 800; }
-.row.urg-late { --ub: var(--red-d); --pb: var(--red); --pt: var(--red-t); }
-.row.urg-today { --ub: var(--orange-d); --pb: var(--orange); --pt: var(--orange-t); }
-.row.urg-soon { --ub: var(--butter-d); --pb: var(--butter); --pt: var(--butter-t); }
-.row.urg-week { --ub: var(--teal-d); --pb: var(--teal); --pt: var(--teal-t); }
-.row.urg-later { --ub: var(--sky-d); --pb: var(--sky); --pt: var(--sky-t); }
-.mrow { gap: 12px; justify-content: flex-start; background: var(--butter); padding-left: 12px; }
-html[data-theme="dark"] .mrow { background: var(--butter); }
-.dtile { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 12px; background: var(--card); line-height: 1.05; }
-.dtile b { font-size: 1.05rem; }
-.dtile small { font-size: .62rem; font-weight: 800; text-transform: uppercase; color: var(--butter-t); }
-.load { grid-template-columns: 28px minmax(0, 1fr) 96px 22px; }
-.av-s { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: color-mix(in srgb, var(--u) 40%, var(--card)); color: var(--ink); font-size: .72rem; font-weight: 800; }
-
-/* Scheduled meetings table */
-.tbl-wrap { overflow-x: auto; }
-.tbl { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin-top: -4px; }
-.tbl th { padding: 0 16px 2px; text-align: left; color: var(--ink-soft); font-size: .76rem; font-weight: 700; white-space: nowrap; }
-.tbl td { padding: 13px 16px; border: 0; background: var(--fill); font-size: .9rem; font-weight: 600; white-space: nowrap; }
-.tbl td:first-child { border-radius: 14px 0 0 14px; }
-.tbl td:last-child { border-radius: 0 14px 14px 0; }
-.tbl .mt { display: inline-flex; align-items: center; gap: 8px; }
-.tbl .mt .dot { margin: 0; }
-
-/* Group dropdown */
-.group-wrap { position: relative; }
-.group-menu { position: fixed; z-index: 60; padding: 8px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); box-shadow: 0 14px 34px rgba(23, 38, 54, .16); }
-.gm-title { margin: 4px 10px 6px; color: var(--ink-soft); font-size: .76rem; font-weight: 800; }
-.gm-item { display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 10px; border: 0; border-radius: 12px; background: none; color: var(--ink); font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
-.gm-item:hover { background: var(--fill); }
-.gm-badge { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 9px; background: var(--sky); color: var(--sky-t); font-size: .8rem; font-weight: 800; }
-.gm-badge.h1 { background: var(--butter); color: var(--butter-t); } .gm-badge.h2 { background: var(--teal); color: var(--teal-t); }
-.gm-badge.h3 { background: var(--blush); color: var(--blush-t); } .gm-badge.h4 { background: var(--lilac); color: var(--lilac-t); }
-.gm-badge.manage { background: var(--fill); color: var(--ink-soft); }
-.gm-badge .ic { width: 16px; height: 16px; }
-.gm-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gm-check { width: 16px; height: 16px; flex: none; color: var(--teal-d); }
-.gm-sep { height: 1px; margin: 6px 4px; background: var(--line); }
-.gs-chev { transition: transform .15s ease; }
-#group-switch-btn[aria-expanded="true"] .gs-chev { transform: rotate(180deg); }
-
-/* Wider color range: light fill with a dark counterpart ring */
-.color-options { display: flex; flex-wrap: wrap; gap: 8px; max-width: none; }
-.color-option { padding: 7px 14px 7px 8px; }
-.color-swatch { width: 22px; height: 22px; background: color-mix(in srgb, var(--u) 32%, var(--card)); border: 2px solid var(--u); }
-
-.topbar { position: fixed; top: 14px; left: 14px; z-index: 45; display: flex; align-items: center; gap: 2px; }
-.tb-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); cursor: pointer; }
-.tb-btn:hover { background: var(--fill); color: var(--ink); }
-.tb-btn .ic { width: 20px; height: 20px; }
-.side { padding-top: 64px; }
-.mini .topbar { left: 21px; }
-.mini .side { padding-top: 72px; }
-@media (max-width: 860px) {
-  .topbar { display: none; }
-  .side, .mini .side { padding-top: 14px; }
+.person-schedule[style*="--u:#ffeda8"] .mg .c.x,
+.person-schedule[style*="--u: #ffeda8"] .mg .c.x {
+  background: #ffeda8;
+  border-color: #ffeda8;
 }

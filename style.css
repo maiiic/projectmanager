@@ -530,3 +530,304 @@ html[data-theme="dark"] .row, html[data-theme="dark"] .group, html[data-theme="d
 html[data-theme="dark"] .btn-quiet, html[data-theme="dark"] .icon { background: var(--fill); color: var(--ink); }
 html[data-theme="dark"] .person header { background: var(--fill); color: var(--ink); }
 @media (max-width: 860px) { #content:has(.schedule-page) { height: calc(100dvh - 88px); padding: 12px; } .schedule-page { --s-cell: clamp(11px, calc((100dvh - 290px) / 33), 16px); } .availability-overview { width: 580px; } }
+
+/* ===============================================================
+   Refinement: profile colors, separate schedule cards, fixed board
+   columns, group picker, settings and sidebar.
+   =============================================================== */
+:root { --sh-card: 0 1px 2px rgba(23, 38, 54, .05), 0 6px 18px rgba(23, 38, 54, .04); }
+
+/* Directory: every profile uses the member's own color (same one as their schedule) */
+.dir .person:nth-child(n) { border: 1px solid var(--line); }
+.dir .person:nth-child(n) header { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 0; border-radius: 16px; background: color-mix(in srgb, var(--u, #4f94dc) 16%, var(--card)); color: var(--ink); }
+.p-av { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--u, #4f94dc) 55%, var(--card)); color: var(--ink); font-weight: 800; }
+.p-id { display: grid; min-width: 0; line-height: 1.3; }
+.p-id strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+.p-id small { color: var(--ink-soft); font-weight: 600; }
+
+/* Task board: fixed-width columns instead of stretching across the page */
+.board { grid-auto-columns: 304px; justify-content: start; }
+
+/* Schedule: the overview and every person get their own card on one sideways rail */
+.schedule-scroll { padding: 2px 2px 14px; border: 0; border-radius: 0; background: transparent; }
+.schedule-track { gap: 14px; padding: 2px 2px 0; }
+.member-calendars { gap: 14px; }
+.availability-overview, .person-schedule { padding: 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); box-shadow: var(--sh-card); overflow: visible; }
+.overview-title, .person-schedule-title { height: 32px; margin-bottom: 8px; padding: 0 12px; border-radius: 12px; background: var(--fill); color: var(--ink); font-size: .78rem; }
+.person-schedule-title { justify-content: flex-start; background: color-mix(in srgb, var(--u) 14%, var(--card)); }
+.person-schedule-title strong { max-width: 110px; }
+.person.is-mine, .person-schedule.is-mine { border-color: color-mix(in srgb, var(--u) 45%, var(--card)); }
+.schedule-track .g { gap: 2px; }
+.schedule-track .g b { border-radius: 6px; background: transparent; color: var(--ink-soft); }
+.schedule-track .mg { padding: 0; }
+.schedule-track .mg .c { border: 0; border-radius: 5px; background: var(--fill); }
+.schedule-track .mg .c.x { background: color-mix(in srgb, var(--u) 50%, var(--card)); }
+.schedule-track .mg.me .c:hover { outline: 2px solid color-mix(in srgb, var(--u) 70%, var(--card)); outline-offset: -1px; }
+/* softer availability states */
+.schedule-track .ov .c { border-radius: 5px; }
+.schedule-track .ov .c.l0 { background: #fbebed; color: #b4566a; }
+.schedule-track .ov .c.l2 { background: var(--card); color: #4b8aa8; outline: 1px solid var(--line); }
+.schedule-track .ov .c.l4 { background: #e7f6ed; color: #3b8a62; }
+.schedule-legend .dot.l0 { background: #f7d6db; } .schedule-legend .dot.l4 { background: #cdeedb; }
+@media (min-width: 861px) { .schedule-page { --s-cell: clamp(11px, calc((100dvh - 300px) / 33), 19px); } }
+
+/* Group picker */
+.workspace { display: grid; gap: 28px; max-width: 900px; margin: 0 auto; padding-top: 12px; }
+.workspace-head { display: flex; align-items: center; gap: 16px; margin: 0; }
+.workspace-head .hint { margin: 2px 0 0; }
+.workspace-mark { display: grid; place-items: center; flex: none; width: 54px; height: 54px; border-radius: 18px; background: var(--teal); color: var(--teal-t); }
+.workspace-mark .ic { width: 26px; height: 26px; }
+.workspace-section h2 { margin-bottom: 12px; justify-content: flex-start; }
+.workspace-list { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; max-width: none; }
+.workspace-item { gap: 14px; padding: 14px 16px; border-radius: 18px; box-shadow: var(--sh-card); transition: transform .12s ease, border-color .12s ease; }
+.workspace-item:hover { background: var(--card); border-color: var(--teal-d); transform: translateY(-1px); }
+.workspace-badge { width: 44px; height: 44px; border-radius: 14px; font-size: 1.05rem; }
+.workspace-item.h1 .workspace-badge { background: var(--butter); color: var(--butter-t); }
+.workspace-item.h2 .workspace-badge { background: var(--teal); color: var(--teal-t); }
+.workspace-item.h3 .workspace-badge { background: var(--blush); color: var(--blush-t); }
+.workspace-item.h4 .workspace-badge { background: var(--lilac); color: var(--lilac-t); }
+.workspace-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-go { margin-left: auto; color: var(--ink-soft); font-size: 1.4rem; line-height: 1; }
+.workspace-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--gap); }
+.workspace-card { display: grid; gap: 12px; align-content: start; padding: 22px; border: 1px solid var(--line); border-radius: 22px; background: var(--card); box-shadow: var(--sh-card); }
+.workspace-card h2 { margin: 0; }
+.workspace-card > p { margin: -6px 0 4px; color: var(--ink-soft); font-size: .85rem; font-weight: 600; }
+.workspace-card .btn { justify-self: start; }
+.ws-ic { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 14px; }
+.ws-ic.c-sky { background: var(--sky); color: var(--sky-t); } .ws-ic.c-blush { background: var(--blush); color: var(--blush-t); }
+
+/* Settings */
+.settings-page { max-width: 780px; }
+.settings-card { display: block; padding: 0; border: 1px solid var(--line); border-radius: 22px; background: var(--card); box-shadow: var(--sh-card); overflow: hidden; }
+.set-row { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 24px; padding: 24px 26px; border-bottom: 1px solid var(--line); }
+.set-label h2 { margin: 0 0 2px; font-size: .98rem; justify-content: flex-start; }
+.set-label p { margin: 0; color: var(--ink-soft); font-size: .8rem; font-weight: 600; }
+.set-body { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.settings-card .field input { max-width: 380px; }
+.settings-note { margin: 0; color: var(--ink-soft); font-size: .78rem; font-weight: 600; }
+.color-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 440px; }
+.color-option { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--card); font-size: .82rem; font-weight: 700; }
+.color-option:has(input:checked) { border-color: var(--teal-d); background: var(--teal); color: var(--teal-t); }
+.color-swatch { width: 20px; height: 20px; flex: none; border-radius: 50%; background: color-mix(in srgb, var(--u) 55%, var(--card)); }
+.theme-options { display: flex; flex-wrap: wrap; gap: 14px; }
+.theme-tile { position: relative; display: grid; justify-items: center; gap: 8px; border: 0; padding: 0; cursor: pointer; font-size: .82rem; font-weight: 700; }
+.theme-tile input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.theme-preview { width: 120px; height: 76px; border: 2px solid var(--line); border-radius: 16px; }
+.theme-preview.is-light { background: linear-gradient(90deg, #eef1f2 0 28%, #ffffff 28%); }
+.theme-preview.is-dark { background: linear-gradient(90deg, #2e3640 0 28%, #1c2229 28%); }
+.theme-tile:has(input:checked) .theme-preview { border-color: var(--teal-d); box-shadow: 0 0 0 3px var(--teal); }
+.theme-tile:has(input:focus-visible) .theme-preview { outline: 2px solid var(--teal-d); outline-offset: 2px; }
+.set-foot { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 18px 26px; background: var(--fill); }
+.settings-feedback { margin: 0 auto 0 0; color: var(--teal-t); font-size: .82rem; font-weight: 700; }
+
+/* Sidebar */
+.side { gap: 18px; }
+.group-switch { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.group-switch:hover { border-color: var(--teal-b); background: var(--fill); }
+.gs-badge { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 11px; background: var(--sky); color: var(--sky-t); font-weight: 800; }
+.gs-text { display: grid; flex: 1; min-width: 0; line-height: 1.25; }
+.gs-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; font-weight: 800; }
+.gs-text span { color: var(--ink-soft); font-size: .72rem; font-weight: 600; }
+.gs-chev { width: 16px; height: 16px; color: var(--ink-soft); }
+.side > #nav { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+#nav button { height: 42px; gap: 12px; padding: 0 14px; font-size: .9rem; }
+#nav [data-go="settings"] { margin-top: auto; }
+.account { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+.account-badge { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--lilac); color: var(--lilac-t); font-weight: 800; }
+.account .who { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .76rem; }
+.account .icon { flex: none; }
+.mini .group-switch { width: 46px; padding: 6px; justify-content: center; }
+.mini .group-switch::before { content: none; }
+.mini .group-switch > .gs-badge { display: grid; }
+.mini .side > #nav { align-items: center; }
+.mini .account { flex-direction: column; padding: 8px 4px; border: 0; background: none; }
+@media (min-width: 861px) { .side { position: sticky; top: 0; align-self: start; height: 100dvh; overflow-y: auto; } }
+@media (max-width: 860px) {
+  .group-switch { flex: 1; width: auto; min-width: 180px; }
+  .side > #nav { flex: none; flex-direction: row; }
+  #nav [data-go="settings"] { margin-top: 0; }
+  .account { border: 0; padding: 0; background: none; }
+  .set-row { grid-template-columns: 1fr; gap: 14px; padding: 20px; }
+  .color-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .set-foot { padding: 16px 20px; }
+}
+
+/* ================ 2026 compact dashboard enhancements ================ */
+:root { --meeting-bg:#fff4d9; --meeting-ink:#846018; }
+.logo { width:29px; height:29px; border-radius:9px; background:#e6f4ed; color:#247b63; }
+.logo .ic { width:16px; height:16px; stroke-width:1.8; }
+.top { position:relative; }
+.side { position:relative; }
+.group-menu { position:absolute; left:14px; right:14px; top:115px; z-index:30; padding:7px; border:1px solid var(--line); border-radius:15px; background:var(--card); box-shadow:0 12px 30px rgba(33,42,46,.12); }
+.group-menu[hidden] { display:none!important; }
+.group-menu-label { padding:6px 10px 7px; color:var(--ink-soft); font-weight:800; font-size:.7rem; }
+.group-menu-item { width:100%; min-height:35px; border:0; border-radius:9px; padding:7px 10px; display:flex; align-items:center; gap:9px; text-align:left; background:transparent; color:var(--ink); cursor:pointer; font:inherit; font-size:.8rem; font-weight:700; }
+.group-menu-item:hover,.group-menu-item.is-current { background:var(--fill); }
+.group-menu-item .menu-dot { width:8px; height:8px; border-radius:50%; background:var(--sky-d); flex:none; }
+.menu-check { margin-left:auto; color:var(--teal-d); }
+.group-menu-divider { height:1px; margin:6px 4px; background:var(--line); }
+.group-menu-item.manage-item { color:var(--teal-t); }
+.group-menu-item .workspace-go { margin-left:auto; font-size:1.1rem; }
+.mini .group-menu { left:6px; right:auto; top:114px; width:232px; }
+/* Home dashboard: compact, clear, softly rounded */
+.dashboard-panel { padding:16px; }
+.dashboard-panel h2 { margin-bottom:12px; gap:8px; }
+.panel-head-actions { display:flex; align-items:center; gap:8px; margin-left:auto; }
+.section-link { display:grid; place-items:center; flex:none; width:27px; height:27px; margin-left:auto; border:1px solid var(--line); border-radius:9px; background:var(--fill); color:var(--ink-soft); cursor:pointer; }
+.section-link .ic { width:14px; height:14px; }
+.section-link:hover { background:var(--sky); color:var(--sky-t); }
+.home-calendar-connect { display:flex; justify-content:flex-end; }
+.home-calendar-connect .gbar { margin:0 0 10px auto; justify-content:flex-end; max-width:100%; }
+.home-calendar-connect .gbar select { max-width:245px; min-width:160px; }
+.home-calendar-connect .gbar .btn { height:31px; font-size:.72rem; }
+.home-calendar-connect .gbar small { max-width:220px; }
+.cal i.today { background:#fff3cc; border-color:#eddb9a; color:#805c14; }
+.chip.m { background:var(--meeting-bg); color:var(--meeting-ink); }
+.today .chip.m { background:#fff9e9; color:var(--meeting-ink); }
+.row.pressing-row,.row.meeting-row { width:100%; text-align:left; border:1px solid transparent; cursor:pointer; font:inherit; color:var(--ink); transition:border-color .12s, transform .12s; }
+.row.pressing-row:hover,.row.meeting-row:hover { transform:translateX(2px); border-color:var(--line); }
+.row-body { display:grid; min-width:0; gap:2px; }
+.row-body b { font-size:.84rem; font-weight:800; }
+.row-body small { font-size:.73rem; }
+.pressing-row.urgency-late { background:#fbe9ec; }
+.pressing-row.urgency-today { background:#fff0db; }
+.pressing-row.urgency-soon { background:#fff7e7; }
+.pressing-row.urgency-normal { background:#f4f6f8; }
+.pressing-row.urgency-late .due { color:#ac3d58; }
+.pressing-row.urgency-today .due { color:#9c621a; }
+.pressing-row.urgency-soon .due { color:#95702e; }
+.meeting-row { background:var(--meeting-bg); }
+.meeting-row .due { color:var(--meeting-ink); }
+.load-link { width:100%; padding:5px 4px; border:0; border-radius:9px; background:transparent; color:var(--ink); cursor:pointer; text-align:left; font:inherit; }
+.load-link:hover { background:var(--fill); }
+progress { height:9px; background:#f2f0e9; }
+progress::-webkit-progress-bar { background:#f2f0e9; }
+progress::-webkit-progress-value { background:#a8d8c7; }
+progress::-moz-progress-bar { background:#a8d8c7; }
+progress.work::-webkit-progress-value { background:#a9cce8; }
+progress.work::-moz-progress-bar { background:#a9cce8; }
+/* Invites: replace wide spreadsheet with readable mini event cards */
+.meeting-list { display:grid; gap:9px; }
+.meeting-list-item { display:flex; align-items:center; gap:13px; padding:12px 14px; border:1px solid #f1e9d3; border-radius:15px; background:#fffaf0; }
+.meeting-date-mark { display:grid; place-items:center; align-content:center; width:49px; height:53px; flex:none; border-radius:12px; background:#ffedbe; color:#825b19; }
+.meeting-date-mark span { font-size:.65rem; line-height:1.2; font-weight:800; text-transform:uppercase; }
+.meeting-date-mark strong { font-size:1.35rem; line-height:1.2; }
+.meeting-list-info { display:grid; flex:1; gap:3px; min-width:0; }
+.meeting-list-info strong { font-size:.87rem; }
+.meeting-list-info span { color:var(--ink-soft); font-size:.76rem; }
+.meeting-list-extra { display:grid; justify-items:end; gap:5px; }
+.meeting-list-extra small { white-space:nowrap; font-size:.7rem; }
+.meeting-status { background:#e3f4e9; color:#23714e; }
+/* Larger coordinated selection of pastel colors, with a dark counterpart */
+.color-options { grid-template-columns:repeat(4,minmax(0,1fr)); max-width:580px; gap:8px; }
+.color-option { padding:8px 10px; font-size:.73rem; min-width:0; }
+.color-swatch { background:color-mix(in srgb,var(--u) 60%,white); border:1px solid color-mix(in srgb,var(--u) 70%,white); }
+.color-option:has(input:checked) { border-color:var(--u); background:color-mix(in srgb,var(--u) 14%,white); color:var(--ink); }
+/* Slightly smaller and more readable calendar connection bar */
+.gbar { justify-content:flex-end; }
+/* Dark theme counterparts */
+html[data-theme="dark"] .cal i.today { background:#65522c; border-color:#a48748; color:#ffe6a6; }
+html[data-theme="dark"] .chip.m,html[data-theme="dark"] .meeting-row { background:#4b4028; color:#ffe5a5; }
+html[data-theme="dark"] .meeting-row .due { color:#ffe0a0; }
+html[data-theme="dark"] .pressing-row.urgency-late { background:#59343f; }
+html[data-theme="dark"] .pressing-row.urgency-today { background:#59452f; }
+html[data-theme="dark"] .pressing-row.urgency-soon { background:#484234; }
+html[data-theme="dark"] .pressing-row.urgency-normal { background:#303945; }
+html[data-theme="dark"] .meeting-list-item { background:#3f382b; border-color:#594d32; }
+html[data-theme="dark"] .meeting-date-mark { background:#66532d; color:#ffe2a2; }
+html[data-theme="dark"] .meeting-list-info span { color:var(--ink-soft); }
+html[data-theme="dark"] .group-menu { background:var(--card); }
+html[data-theme="dark"] .color-option:has(input:checked) { background:color-mix(in srgb,var(--u-dark) 65%,var(--card)); border-color:var(--u); }
+html[data-theme="dark"] .color-swatch { background:var(--u-dark); border-color:var(--u); }
+html[data-theme="dark"] .person-schedule-title { background:color-mix(in srgb,var(--u-dark) 45%,var(--card)); }
+html[data-theme="dark"] .schedule-track .mg .c.x { background:var(--u-dark); border-color:var(--u); }
+html[data-theme="dark"] .p-av { background:var(--u-dark); color:#fff; }
+@media(max-width:860px) { .group-menu { position:fixed; top:125px; left:12px; right:auto; width:min(280px,calc(100vw - 24px)); } .color-options { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:500px) { .color-options { grid-template-columns:repeat(2,minmax(0,1fr)); } .meeting-list-extra { align-items:end; } .meeting-list-item { flex-wrap:wrap; } }
+
+
+/* =====================================================================
+   ALL-PASTEL PALETTE — muted highlights, no vivid amber or neon accents.
+   Preserve contrast through darker text, not saturated backgrounds.
+   ===================================================================== */
+:root {
+  --teal: #e9f6f1; --teal-b: #d0e9df; --teal-d: #91c7b6; --teal-t: #356c5d;
+  --sky: #eaf3fb; --sky-d: #a9cdeb; --sky-t: #496d8a;
+  --blush: #fbeef2; --blush-d: #eeb9cc; --blush-t: #8e5268;
+  --butter: #fcf6df; --butter-d: #ecdaa2; --butter-t: #7f6a36;
+  --lilac: #f2effa; --lilac-d: #c9bcea; --lilac-t: #6b5b8b;
+  --danger: #9c5365;
+  --meeting-bg: #fff9e9; --meeting-ink: #846d42;
+}
+/* Gently tinted, cohesive dashboard and navigation */
+.logo { background:#eaf5ef; color:#487b6a; }
+.s1 { background:#edf5fb; color:#496d8a; }
+.s2 { background:#fcf7e8; color:#806e46; }
+.s3 { background:#fbeef1; color:#916276; }
+.s4 { background:#eaf6f0; color:#477963; }
+#nav [data-go="home"] .ic { color:#8dbadc; }
+#nav [data-go="tasks"] .ic { color:#df9fb8; }
+#nav [data-go="schedule"] .ic { color:#8ec7b4; }
+#nav [data-go="directory"] .ic { color:#d9bf83; }
+#nav [data-go="invites"] .ic { color:#c6b2de; }
+#nav [data-go="settings"] .ic { color:#bdaee0; }
+#nav [data-go="home"].is-active { background:#edf5fb; color:#496d8a; }
+#nav [data-go="tasks"].is-active { background:#fbeef2; color:#8e5268; }
+#nav [data-go="schedule"].is-active { background:#eaf6f0; color:#356c5d; }
+#nav [data-go="directory"].is-active { background:#fcf6df; color:#7f6a36; }
+#nav [data-go="invites"].is-active, #nav [data-go="settings"].is-active { background:#f2effa; color:#6b5b8b; }
+.col { background:#eaf3fb; }
+.col:nth-child(5n+2) { background:#fcf6df; }
+.col:nth-child(5n+3) { background:#e9f6f1; }
+.col:nth-child(5n+4) { background:#fbeef2; }
+.col:nth-child(5n+5) { background:#f2effa; }
+.col h2::before { background:#a9cdeb; }
+.col:nth-child(5n+2) h2::before { background:#e4cf92; }
+.col:nth-child(5n+3) h2::before { background:#9ccfbd; }
+.col:nth-child(5n+4) h2::before { background:#eab1c6; }
+.col:nth-child(5n+5) h2::before { background:#c9bcea; }
+.cal i.today { background:#fcf7e2; border-color:#ecdfb8; color:#7b6840; }
+.chip.m, .today .chip.m { background:#fbf2d6; color:#806b3c; }
+.pressing-row.urgency-late { background:#f9edf0; }
+.pressing-row.urgency-today { background:#fff3e9; }
+.pressing-row.urgency-soon { background:#fcf8e9; }
+.pressing-row.urgency-normal { background:#f7f7f4; }
+.pressing-row.urgency-late .due { color:#99576b; }
+.pressing-row.urgency-today .due { color:#916d4f; }
+.pressing-row.urgency-soon .due { color:#857548; }
+.meeting-row { background:#fff9eb; }
+.meeting-row .due { color:#87734e; }
+.meeting-list-item { background:#fffaf0; border-color:#f1ead9; }
+.meeting-date-mark { background:#f9edc8; color:#776443; }
+.meeting-status { background:#eaf6ee; color:#45755c; }
+progress, progress::-webkit-progress-bar { background:#f3f1ec; }
+progress::-webkit-progress-value { background:#b8ddcd; }
+progress::-moz-progress-bar { background:#b8ddcd; }
+progress.work::-webkit-progress-value { background:#c1dbee; }
+progress.work::-moz-progress-bar { background:#c1dbee; }
+/* Individual member color is now stored as a pastel; don't darken the swatch. */
+.color-swatch { background:var(--u); border-color:color-mix(in srgb,var(--u) 76%,#b3a99f); }
+.color-option:has(input:checked) { background:color-mix(in srgb,var(--u) 30%,#fffefa); border-color:color-mix(in srgb,var(--u) 76%,#a8a49c); }
+.schedule-track .mg .c.x { background:var(--u); border-color:color-mix(in srgb,var(--u) 70%,#9c9c9c); }
+.person-schedule-title { background:color-mix(in srgb,var(--u) 43%,#fffefa); }
+.member-indicator { background:var(--u); }
+.p-av { background:var(--u); color:#364552; }
+/* Overview still has its three status states, simply softened. */
+.schedule-track .ov .c.l0 { background:#f9eaed; color:#995468; }
+.schedule-track .ov .c.l2 { background:#fff; color:#587b91; }
+.schedule-track .ov .c.l4 { background:#eaf6ef; color:#47785e; }
+.schedule-best .tag, .best .tag { background:#e9f6f1; color:#356c5d; }
+/* Muted, non-neon dark-mode counterparts */
+html[data-theme="dark"] {
+  --teal:#29463e; --teal-t:#c4e1d4; --teal-d:#80b4a1;
+  --sky:#304558; --sky-t:#c3dcf0; --sky-d:#9abbd8;
+  --blush:#4c3942; --blush-t:#f3cedd; --blush-d:#d6a6b8;
+  --butter:#4c4635; --butter-t:#f0dfb2; --butter-d:#dbc891;
+  --lilac:#433d50; --lilac-t:#e0d4f2; --lilac-d:#bcadd6;
+  --meeting-bg:#464033; --meeting-ink:#f0deb6;
+}
+html[data-theme="dark"] .color-swatch { background:var(--u-dark); border-color:color-mix(in srgb,var(--u) 60%,#59616b); }
+html[data-theme="dark"] .color-option:has(input:checked) { background:color-mix(in srgb,var(--u-dark) 45%,var(--card)); border-color:var(--u); }
+html[data-theme="dark"] .schedule-track .mg .c.x { background:var(--u-dark); border-color:color-mix(in srgb,var(--u) 60%,var(--card)); }
+html[data-theme="dark"] .meeting-date-mark { background:#514732; color:#f2ddb0; }
+html[data-theme="dark"] .cal i.today { background:#514a36; color:#f3e4bd; border-color:#796c4f; }

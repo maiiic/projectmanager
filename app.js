@@ -11,7 +11,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = (n) => String(n).padStart(2, "0");
 const now = new Date();
-const S = { user: null, groups: [], choosingGroup: false, group: null, members: [], tasks: [], busy: [], meetings: [], mine: new Set(), dirty: false, view: "home", month: new Date(now.getFullYear(), now.getMonth(), 1), sub: false, cols: [], doneIds: new Set(), dragging: false, gtoken: null, gcals: [], gevents: [], gerr: "" };
+const S = { user: null, groups: [], choosingGroup: false, group: null, members: [], tasks: [], busy: [], meetings: [], mine: new Set(), dirty: false, view: "home", month: new Date(now.getFullYear(), now.getMonth(), 1), sub: false, cols: [], doneIds: new Set(), dragging: false, gtoken: null, gcals: [], gevents: [], gerr: "", calendarMode: "month", calendarDate: new Date(), calendarItems: [] };
 const DAYS = ["M", "T", "W", "Th", "F", "S"], SLOTS = 32, PR = ["", "Low", "Medium", "High"];
 const FIELDS = [
   ["role", "Role", "text", "e.g. Designer, Developer"],
@@ -26,7 +26,7 @@ const COLORS = [
   { name: "Sky", hex: "#4f94dc" }, { name: "Blue", hex: "#3f78d8" }, { name: "Indigo", hex: "#5b5bd6" },
   { name: "Violet", hex: "#9a5bd0" }, { name: "Lilac", hex: "#8878e4" }, { name: "Pink", hex: "#d9609f" },
   { name: "Rose", hex: "#e6708f" }, { name: "Red", hex: "#d6494f" }, { name: "Orange", hex: "#e07f3a" },
-  { name: "Amber", hex: "#d99e2e" }, { name: "Yellow", hex: "#ffd033" }, { name: "Green", hex: "#4aa75a" },
+  { name: "Amber", hex: "#d99e2e" }, { name: "Yellow", hex: "#d4aa00" }, { name: "Green", hex: "#4aa75a" },
   { name: "Mint", hex: "#19a690" }, { name: "Teal", hex: "#1c9aa8" }, { name: "Slate", hex: "#7286a0" },
 ];
 const safeColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase())?.hex || COLORS[0].hex;
@@ -262,26 +262,80 @@ async function route() {
 }
 
 function draw() {
+  document.querySelector('.event-modal-backdrop')?.remove();
   if (S.choosingGroup) return showGroupPicker();
   document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("is-active", b.dataset.go === S.view));
   $("content").innerHTML = { home, tasks, schedule, invites, directory, settings }[S.view]();
 }
 
+// Read-only calendar UI. Events are displayed from existing Supabase + Google data.
+const dayKey = (date) => `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+const addDays = (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+const niceTime = (v) => v ? new Date(v).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'}) : '';
+function collectCalendarItems() {
+  const meetings = S.meetings.map(m => ({type:'meeting', title:m.title || 'Meeting', date:dayKey(new Date(m.starts_at)), start:m.starts_at, end:m.ends_at, description:m.description || '', emails:m.emails || [], url:'', location:'', allDay:false}));
+  const googleEvents = S.gevents.filter(g => !S.meetings.some(m => m.gcal_event_id && m.gcal_event_id === g.id)).map(g => ({...g, type:'google', date:g.day}));
+  const dueTasks = S.tasks.filter(t => t.due && !isDone(t)).map(t => ({type:'task', title:t.title, date:t.due, allDay:true, description:`Priority: ${PR[t.priority] || 'Normal'} · Assigned to: ${who(t)}`, url:''}));
+  S.calendarItems = [...meetings, ...googleEvents, ...dueTasks];
+  return S.calendarItems;
+}
+function calChip(item, index) {
+  const cls = item.type === 'meeting' ? 'm' : item.type === 'google' ? 'g' : '';
+  return `<button type="button" class="chip ${cls} event-chip" data-event="${index}" title="${esc(item.title)}">${esc(item.title)}</button>`;
+}
 function calendar() {
-  const d = S.month, y = d.getFullYear(), m = d.getMonth(), n = new Date(y, m + 1, 0).getDate();
-  const t0 = today().toLocaleDateString("en-CA");
-  let h = `<div class="cal-head"><button class="icon" data-m="-1" aria-label="Previous month">‹</button><h2>${d.toLocaleString("en", { month: "long", year: "numeric" })}</h2><button class="icon" data-m="1" aria-label="Next month">›</button></div><div class="cal">`;
-  h += ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((x) => `<b>${x}</b>`).join("") + "<span></span>".repeat(new Date(y, m, 1).getDay());
-  for (let i = 1; i <= n; i++) {
-    const iso = `${y}-${pad(m + 1)}-${pad(i)}`;
-    const ev = [
-      ...S.meetings.filter((x) => new Date(x.starts_at).toLocaleDateString("en-CA") === iso).map((x) => [x.title, "m"]),
-      ...S.gevents.filter((x) => x.day === iso && !S.meetings.some((m) => m.gcal_event_id === x.id)).map((x) => [x.title, "g"]),
-      ...S.tasks.filter((x) => x.due === iso && !isDone(x)).map((x) => [x.title, ""]),
-    ];
-    h += `<i class="${iso === t0 ? "today" : ""}">${i}${ev.slice(0, 2).map(([a, c]) => `<span class="chip ${c}">${esc(a)}</span>`).join("")}${ev.length > 2 ? `<small>+${ev.length - 2} more</small>` : ""}</i>`;
+  const items = collectCalendarItems();
+  const mode = S.calendarMode;
+  const focus = S.calendarDate;
+  const startOfWeek = addDays(focus, -focus.getDay());
+  const label = mode === 'month' ? S.month.toLocaleString('en', {month:'long', year:'numeric'})
+    : mode === 'week' ? `${startOfWeek.toLocaleDateString('en', {month:'short', day:'numeric'})} – ${addDays(startOfWeek,6).toLocaleDateString('en',{month:'short',day:'numeric',year:'numeric'})}`
+    : focus.toLocaleDateString('en', {weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  let h = `<div class="cal-head cal-toolbar"><div class="cal-nav"><button type="button" class="icon" data-cal-step="-1" aria-label="Previous ${mode}">‹</button><h2>${esc(label)}</h2><button type="button" class="icon" data-cal-step="1" aria-label="Next ${mode}">›</button></div><div class="cal-controls"><button type="button" class="cal-today" data-cal-today>Today</button><div class="cal-mode-switch" aria-label="Calendar view">${['month','week','day'].map(m=>`<button type="button" data-cal-mode="${m}" class="${m===mode?'active':''}" aria-pressed="${m===mode}">${m[0].toUpperCase()+m.slice(1)}</button>`).join('')}</div></div></div>`;
+  if (mode === 'month') {
+    const d=S.month, y=d.getFullYear(), m=d.getMonth(), n=new Date(y,m+1,0).getDate();
+    h += `<div class="cal">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x=>`<b>${x}</b>`).join('')}${'<span></span>'.repeat(new Date(y,m,1).getDay())}`;
+    for(let day=1;day<=n;day++) {
+      const date=dayKey(new Date(y,m,day));
+      const matches=items.map((ev,i)=>({ev,i})).filter(x=>x.ev.date===date);
+      h += `<div class="cal-date ${date===dayKey(today())?'today':''}"><button type="button" class="cal-day-num" data-cal-day="${date}" title="Open daily view">${day}</button>${matches.slice(0,2).map(x=>calChip(x.ev,x.i)).join('')}${matches.length>2?`<button type="button" class="cal-more" data-cal-day="${date}">+${matches.length-2} more</button>`:''}</div>`;
+    }
+    h += `</div>`;
+  } else {
+    const dates=mode==='day'?[focus]:Array.from({length:7},(_,i)=>addDays(startOfWeek,i));
+    // Include all-day entries before the time grid, and half-hour slots from 8AM–midnight.
+    h += `<div class="time-grid-wrap"><div class="time-grid" style="--day-count:${dates.length}"><span class="time-corner"></span>${dates.map(d=>`<div class="time-day-heading ${dayKey(d)===dayKey(today())?'is-today':''}">${esc(d.toLocaleDateString('en',{weekday:'short',month:'short',day:'numeric'}))}</div>`).join('')}`;
+    h += `<span class="time-label all-day-label">All day</span>${dates.map(d=>{const date=dayKey(d);return `<div class="time-cell all-day-cell">${items.map((ev,i)=>({ev,i})).filter(x=>x.ev.date===date && (x.ev.allDay || !x.ev.start)).map(x=>calChip(x.ev,x.i)).join('')}</div>`}).join('')}`;
+    for(let s=0;s<32;s++) {
+      const mins=480+s*30;
+      const clock=new Date(2026,0,1,Math.floor(mins/60),mins%60).toLocaleTimeString('en',{hour:'numeric',minute:'2-digit'});
+      h += `<span class="time-label">${clock}</span>`;
+      for(const d of dates) {
+        const date=dayKey(d);
+        const matches=items.map((ev,i)=>({ev,i})).filter(({ev})=>{
+          if(ev.allDay || !ev.start || ev.date!==date) return false;
+          const start=new Date(ev.start), end=ev.end?new Date(ev.end):new Date(start.getTime()+30*60000);
+          const cellStart=new Date(d.getFullYear(),d.getMonth(),d.getDate(),Math.floor(mins/60),mins%60).getTime();
+          return start.getTime()>=cellStart && start.getTime()<cellStart+30*60000;
+        });
+        h += `<div class="time-cell">${matches.map(x=>calChip(x.ev,x.i)).join('')}</div>`;
+      }
+    }
+    h += `</div></div>`;
   }
-  return h + `</div><p class="legend"><span><i class="dot c3"></i>Due dates</span><span><i class="dot c1"></i>Meetings</span><span><i class="dot c0"></i>Google Calendar</span></p>`;
+  return h + `<p class="legend"><span><i class="dot c3"></i>Due dates</span><span><i class="dot c1"></i>Meetings</span><span><i class="dot c0"></i>Google Calendar</span></p>`;
+}
+function showEventDetails(index) {
+  const ev=S.calendarItems[Number(index)]; if(!ev) return;
+  const title=esc(ev.title || 'Event');
+  const period=ev.allDay ? 'All day' : ev.start ? `${esc(new Date(ev.start).toLocaleString([], {weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}))}${ev.end?' – '+esc(niceTime(ev.end)):''}` : esc(ev.date);
+  const attendees=Array.isArray(ev.attendees)&&ev.attendees.length ? ev.attendees.map(a=>a.email||a.displayName).filter(Boolean).join(', ') : Array.isArray(ev.emails)?ev.emails.join(', '):'';
+  const meet=typeof ev.meetLink==='string' && /^https:\/\//.test(ev.meetLink)?ev.meetLink:'';
+  const link=typeof ev.url==='string' && /^https:\/\//.test(ev.url)?ev.url:'';
+  const detail=`<div class="event-modal-backdrop" data-close-event><section class="event-detail" role="dialog" aria-modal="true" aria-label="Calendar event details"><div class="event-detail-top"><span class="event-type ${ev.type}">${ev.type==='google'?'Google Calendar':ev.type==='meeting'?'Meeting':'Task due date'}</span><button type="button" class="icon" data-close-event aria-label="Close">✕</button></div><h2>${title}</h2><p class="event-info">◷ ${period}</p>${ev.location?`<p class="event-info">⌖ ${esc(ev.location)}</p>`:''}${ev.organizer?`<p class="event-info">Organizer: ${esc(ev.organizer)}</p>`:''}${attendees?`<p class="event-info">Guests: ${esc(attendees)}</p>`:''}${ev.description?`<p class="event-description">${esc(ev.description)}</p>`:''}<div class="event-links">${meet?`<a href="${esc(meet)}" target="_blank" rel="noopener noreferrer">Join Google Meet ↗</a>`:''}${link?`<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Open in Google Calendar ↗</a>`:''}</div></section></div>`;
+  document.querySelector('.event-modal-backdrop')?.remove();
+  document.body.insertAdjacentHTML('beforeend',detail);
+  document.querySelector('[data-close-event].icon')?.focus();
 }
 
 const urg = (t) => { const d = left(t); return d < 0 ? "late" : d === 0 ? "today" : d <= 2 ? "soon" : d <= 7 ? "week" : "later"; };
@@ -382,7 +436,7 @@ function schedule() {
     const color = safeColor(p.preferred_color);
     let markup = `<section class="person-schedule${me ? " is-mine" : ""}" style="--u:${color}"><div class="person-schedule-title"><span class="member-indicator" style="background:${color}"></span><strong>${esc(nm(p))}${me ? " (you)" : ""}</strong><small>${set.size / 2}h busy</small></div><div class="g mg${me ? " me" : ""}"><span class="mini-time-head"></span>${DAYS.map((d) => `<b>${d}</b>`).join("")}`;
     for (let s = 0; s < SLOTS; s++) {
-      markup += `<em>${tl(s)}</em>`;
+      markup += `<em>${s % 4 === 0 ? th(s) : ""}</em>`;
       for (let d = 0; d < 6; d++) {
         const busy = set.has(`${d}-${s}`);
         markup += `<i class="c${busy ? " x" : ""}" title="${esc(`${FULL[d]}, ${tl(s)} — ${busy ? "Unavailable" : "Available"}`)}"${me ? ` data-d="${d}" data-s="${s}"` : ""}></i>`;
@@ -420,10 +474,19 @@ async function gload() {
   try {
     if (!S.gcals.length) S.gcals = (await gapi("users/me/calendarList?minAccessRole=reader")).items || [];
     if (!S.group.gcal_id) { S.gevents = []; return; }
-    const y = S.month.getFullYear(), m = S.month.getMonth();
-    const q = new URLSearchParams({ timeMin: new Date(y, m, 1).toISOString(), timeMax: new Date(y, m + 1, 1).toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "250" });
+    const anchor = S.calendarMode === 'month' ? S.month : S.calendarDate;
+    const y = anchor.getFullYear(), m = anchor.getMonth();
+    // Two-month cushion on each side supports week navigation across month boundaries.
+    const q = new URLSearchParams({ timeMin: new Date(y, m-1, 1).toISOString(), timeMax: new Date(y, m+2, 1).toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "1000" });
     const j = await gapi(`calendars/${encodeURIComponent(S.group.gcal_id)}/events?${q}`);
-    S.gevents = (j.items || []).map((e) => ({ id: e.id, title: e.summary || "(No title)", day: e.start.date || new Date(e.start.dateTime).toLocaleDateString("en-CA") }));
+    S.gevents = (j.items || []).map((e) => ({
+      id: e.id, title: e.summary || "(No title)",
+      day: e.start?.date || dayKey(new Date(e.start.dateTime)),
+      start: e.start?.dateTime || null, end: e.end?.dateTime || null,
+      allDay: !!e.start?.date, description: e.description || '', location: e.location || '',
+      attendees: e.attendees || [], organizer: e.organizer?.email || '',
+      meetLink: e.hangoutLink || '', url: e.htmlLink || ''
+    }));
     S.gerr = "";
   } catch (err) { S.gerr = err.message; }
 }
@@ -536,9 +599,14 @@ async function moveTask(id, cid) {
 }
 
 $("content").onclick = async (e) => {
-  const t = e.target.closest("[data-goto],[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
+  const t = e.target.closest("[data-event],[data-cal-step],[data-cal-mode],[data-cal-today],[data-cal-day],[data-goto],[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
   if (!t) return;
   const ds = t.dataset;
+  if (ds.event !== undefined) return showEventDetails(ds.event);
+  if (ds.calMode) { S.calendarMode=ds.calMode; if(S.calendarMode==='month') S.month=new Date(S.calendarDate.getFullYear(),S.calendarDate.getMonth(),1); draw(); if(S.gtoken){await gload();draw();} return; }
+  if (ds.calDay) { S.calendarDate=new Date(ds.calDay+'T12:00:00'); S.calendarMode='day'; draw(); if(S.gtoken){await gload();draw();} return; }
+  if (ds.calToday !== undefined) { S.calendarDate=today(); S.month=new Date(S.calendarDate.getFullYear(),S.calendarDate.getMonth(),1);draw(); if(S.gtoken){await gload();draw();}return; }
+  if (ds.calStep) { const step=Number(ds.calStep); if(S.calendarMode==='month'){S.month=new Date(S.month.getFullYear(),S.month.getMonth()+step,1);S.calendarDate=new Date(S.month.getFullYear(),S.month.getMonth(),1);} else {S.calendarDate=addDays(S.calendarDate,step*(S.calendarMode==='week'?7:1));S.month=new Date(S.calendarDate.getFullYear(),S.calendarDate.getMonth(),1);}draw();if(S.gtoken){await gload();draw();}return; }
   if (ds.goto) return navigate(ds.goto);
   if (ds.pickgroup) {
     const chosen = S.groups.find((g) => g.id === ds.pickgroup);
@@ -693,3 +761,6 @@ db.auth.onAuthStateChange((_e, session) => {
     setTimeout(() => boot(session).catch((err) => alert(err.message)), 0);
   }
 });
+// Event dialog dismissal, independent of the app content re-render.
+document.addEventListener('click', (e) => {if(e.target.matches('[data-close-event]')) document.querySelector('.event-modal-backdrop')?.remove();});
+document.addEventListener('keydown', (e) => {if(e.key==='Escape') document.querySelector('.event-modal-backdrop')?.remove();});

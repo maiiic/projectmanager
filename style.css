@@ -488,7 +488,7 @@ input::placeholder, textarea::placeholder { color: #979b9c; font-weight: 500; op
 .person-schedule-title { justify-content: center; background: color-mix(in srgb, var(--u) 16%, white); color: #394852; padding: 0 5px; }
 .person-schedule-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 76px; }
 .member-indicator { width: 7px; height: 7px; flex: none; border-radius: 50%; }
-.schedule-track .mg { grid-template-columns: 65px repeat(6, var(--s-cell)); width: max-content; gap: 1px; padding: 0 3px 3px; }
+.schedule-track .mg { grid-template-columns: 33px repeat(6, var(--s-cell)); width: max-content; gap: 1px; padding: 0 3px 3px; }
 .schedule-track .mg .c { width: var(--s-cell); min-width: 0; height: var(--s-cell); min-height: 0; aspect-ratio: 1; padding: 0; border: 1px solid #e5e9e6; border-radius: 3px; background: #fff; }
 .schedule-track .mg .c.x { background: var(--u); border-color: var(--u); }
 .schedule-track .mg em { font-size: .5rem; padding-right: 3px; }
@@ -753,40 +753,73 @@ html[data-theme="dark"] .mrow { background: var(--butter); }
   .side, .mini .side { padding-top: 14px; }
 }
 
+
+/* ==============================================================
+   FIX: Keep toolbar, sidebar, and main content in correct places.
+   The toolbar is fixed; explicitly position the other grid items.
+   No colors, fonts, or functionality changed.
+   ============================================================== */
 @media (min-width: 861px) {
   #app-view.shell > .side {
     grid-column: 1;
     grid-row: 1;
+    min-width: 0;
   }
-
   #app-view.shell > #content {
     grid-column: 2;
     grid-row: 1;
+    min-width: 0;
+  }
+}
+@media (max-width: 860px) {
+  #app-view.shell > .side {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+  #app-view.shell > #content {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
   }
 }
 
-.schedule-track .mg em {
-  font-size: 0.6rem;
-  white-space: nowrap;
-  text-align: right;
-  padding-right: 6px;
-}
-
-.auth-legal {
-  margin: 18px 0 0;
-  color: #819095;
-  font-size: 0.72rem;
-  line-height: 1.6;
-  text-align: center;
-}
-
-.auth-legal a {
-  color: #568D91;
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.auth-legal a:hover {
-  color: #267969;
-}
+/* Calendar details + month/week/day modes. Scoped to calendar only. */
+.cal-toolbar { flex-wrap: wrap; gap: 12px; }
+.cal-nav, .cal-controls { display:flex; align-items:center; gap: 8px; }
+.cal-nav h2 { margin:0; font-size: 1rem; min-width: 135px; text-align:center; }
+.cal-mode-switch { display:flex; gap:3px; padding:4px; background:var(--fill); border-radius:999px; }
+.cal-mode-switch button, .cal-today { font:inherit; font-size:.76rem; font-weight:800; color:var(--ink-soft); background:transparent; border:0; padding:7px 11px; border-radius:999px; cursor:pointer; }
+.cal-mode-switch button.active { background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.07); }
+.cal-today { background:var(--butter); color:var(--butter-t); }
+.cal-date { min-height:73px; padding:6px; border:1px solid var(--line); border-radius:11px; background:var(--card); overflow:hidden; }
+.cal-date.today { background:var(--butter); border-color:var(--butter-d); }
+.cal-day-num { border:0; background:none; color:var(--ink); padding:0 2px; font:inherit; font-weight:800; cursor:pointer; }
+.event-chip { width:100%; display:block; text-align:left; border:0; cursor:pointer; font:inherit; font-size:.72rem; line-height:1.35; }
+.event-chip:hover { filter:brightness(.96); text-decoration:underline; }
+.cal-more { color:var(--ink-soft); border:0; padding:2px; font:inherit; background:transparent; font-size:.7rem; cursor:pointer; }
+.time-grid-wrap { overflow-x:auto; overflow-y:auto; max-height:min(70vh,770px); border:1px solid var(--line); border-radius:14px; }
+.time-grid { display:grid; grid-template-columns:72px repeat(var(--day-count), minmax(104px,1fr)); min-width:var(--time-min-width, 0); }
+.time-day-heading, .time-corner { position:sticky; top:0; z-index:1; padding:10px 4px; background:var(--fill); text-align:center; font-size:.75rem; font-weight:800; border-bottom:1px solid var(--line); }
+.time-day-heading.is-today { background:var(--butter); }
+.time-label { padding:5px 7px; border-bottom:1px solid var(--line); font-size:.68rem; color:var(--ink-soft); text-align:right; }
+.time-cell { min-height:37px; padding:3px; border-bottom:1px solid var(--line); border-left:1px solid var(--line); display:flex; flex-wrap:wrap; gap:3px; align-items:flex-start; }
+.time-cell .event-chip { white-space:normal; padding:3px 5px; }
+.all-day-cell { min-height:33px; }
+.event-modal-backdrop { position:fixed; inset:0; z-index:200; background:rgba(23,32,44,.36); display:grid; place-items:center; padding:18px; }
+.event-detail { width:min(100%,430px); max-height:85dvh; overflow-y:auto; border:1px solid var(--line); border-radius:22px; padding:22px; box-shadow:0 18px 50px rgba(0,0,0,.12); background:var(--card); color:var(--ink); }
+.event-detail-top { display:flex; align-items:center; justify-content:space-between; }
+.event-detail h2 { margin:14px 0; display:block; font-size:1.25rem; overflow-wrap:anywhere; }
+.event-type { padding:5px 11px; border-radius:999px; background:var(--blush); color:var(--blush-t); font-weight:800; font-size:.75rem; }
+.event-type.google { background:var(--sky); color:var(--sky-t); } .event-type.meeting { background:var(--butter); color:var(--butter-t); }
+.event-info { margin:8px 0; color:var(--ink-soft); font-size:.87rem; overflow-wrap:anywhere; }
+.event-description { margin:14px 0; padding:12px; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--fill); border-radius:12px; font-size:.85rem; }
+.event-links { display:flex; flex-wrap:wrap; gap:10px; margin-top:15px; }
+.event-links a { padding:9px 13px; border-radius:999px; background:var(--teal); color:var(--teal-t); font-size:.8rem; font-weight:800; text-decoration:none; }
+@media(max-width:750px) { .cal-nav h2 { min-width:0; } .cal-toolbar { align-items:flex-start; } .time-grid[style*="--day-count:7"] { min-width:850px; } }
+/* Position the sidebar toggle at the right of the Project Manager title. */
+.side { padding-top:18px; }
+.mini .side { padding-top:18px; }
+.topbar, .mini .topbar { position:static; inset:auto; left:auto; top:auto; z-index:auto; margin-left:auto; flex:none; }
+.topbar .tb-btn { width:32px; height:32px; border-radius:10px; }
+@media(max-width:860px) { .topbar { display:flex; } }

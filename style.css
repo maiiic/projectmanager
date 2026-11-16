@@ -1273,3 +1273,36 @@ html[data-theme="dark"] .task-event-detail .task-event-fields .task-detail-field
   background: color-mix(in srgb, var(--field-edge) 25%, var(--card));
   color: var(--ink);
 }
+
+/* Workspace invitations: keep group selection and sharing as separate actions. */
+.workspace-list .workspace-item { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
+.workspace-open { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px 10px; border: 0; background: transparent; text-align: left; font: inherit; color: var(--ink); cursor: pointer; }
+.workspace-open:hover { background: var(--fill); }
+.workspace-share { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 16px 13px 74px; }
+.ws-share-btn { border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink-soft); padding: 6px 11px; font: inherit; font-size: .72rem; font-weight: 800; cursor: pointer; }
+.ws-share-btn:hover { color: var(--ink); border-color: var(--ink-soft); }
+.ws-share-primary { background: var(--sky); color: var(--sky-t); border-color: transparent; }
+.ws-share-primary:hover { background: var(--sky); color: var(--sky-t); filter: brightness(.97); }
+@media (max-width: 520px) { .workspace-share { padding-left: 16px; } .ws-share-btn { flex: 1; white-space: nowrap; } }
+
+
+/* Final task-pill cleanup: text only, while retaining each user's/status color. */
+.task-event-detail .task-event-fields .task-detail-field.assignee-field strong,
+.task-event-detail .task-event-fields .task-detail-field.status-field strong {
+  gap: 0;
+}
+
+/* Week/Day event chips: .event-chip has border:0 upstream, so set the
+   border STYLE explicitly (width and color alone cannot make it visible). */
+.time-grid > .time-event.event-chip {
+  border: 0;
+  border-left: 5px solid transparent;
+  border-radius: 11px;
+  box-sizing: border-box;
+}
+.time-grid > .time-event.event-chip.m { border-left-color: #E5A0A2; }
+.time-grid > .time-event.event-chip.g { border-left-color: #4F94DC; }
+.time-grid > .time-event.event-chip.t { border-left-color: #A58DD4; }
+html[data-theme="dark"] .time-grid > .time-event.event-chip.m { border-left-color: #E5A0A2; }
+html[data-theme="dark"] .time-grid > .time-event.event-chip.g { border-left-color: #4F94DC; }
+html[data-theme="dark"] .time-grid > .time-event.event-chip.t { border-left-color: #A58DD4; }

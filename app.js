@@ -7,6 +7,37 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const GOOGLE_CLIENT_ID = "521306182221-jgur5pekktg4vi3mf2o3e7u49uur6vic.apps.googleusercontent.com";
 const GSCOPES = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events";
 
+// A shareable URL carries only the existing six-character group code.
+// Keep it through the Google OAuth redirect, but never auto-join a workspace.
+const INVITE_STORAGE_KEY = 'pm-pending-workspace-invite';
+const validInviteCode = (v) => /^[a-z0-9]{6}$/i.test(String(v || '').trim());
+const urlInvite = new URLSearchParams(location.search).get('invite');
+if (validInviteCode(urlInvite)) {
+  try { sessionStorage.setItem(INVITE_STORAGE_KEY, urlInvite.trim()); } catch { /* optional */ }
+}
+const pendingInvite = () => {
+  try { const v = sessionStorage.getItem(INVITE_STORAGE_KEY); return validInviteCode(v) ? v : ''; } catch { return validInviteCode(urlInvite) ? urlInvite : ''; }
+};
+const clearPendingInvite = () => {
+  try { sessionStorage.removeItem(INVITE_STORAGE_KEY); } catch { /* optional */ }
+  const u = new URL(location.href);
+  if (u.searchParams.has('invite')) {
+    u.searchParams.delete('invite');
+    history.replaceState(null, '', u.pathname + u.search + u.hash);
+  }
+};
+const inviteUrl = (code) => `${location.origin}${location.pathname}?invite=${encodeURIComponent(code)}#/workspace`;
+async function copyWorkspaceInvite(value, button) {
+  try {
+    await navigator.clipboard.writeText(value);
+    const prev = button.textContent;
+    button.textContent = 'Copied!';
+    window.setTimeout(() => { if (button.isConnected) button.textContent = prev; }, 1600);
+  } catch {
+    // Clipboard permission is sometimes denied in an embedded browser.
+    window.prompt('Copy this invitation:', value);
+  }
+}
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = (n) => String(n).padStart(2, "0");
@@ -155,7 +186,7 @@ async function boot(session) {
   $("who").textContent = S.user.email || "Signed in";
   $("who-badge").textContent = (S.user.email || "?").charAt(0).toUpperCase();
   await refreshGroups();
-  if (!S.groups.length) return showGroupPicker();
+  if (!S.groups.length || pendingInvite()) return showGroupPicker();
   let preferred;
   try { preferred = localStorage.getItem(`pm-group-${S.user.id}`); } catch {}
   const selected = S.groups.find((g) => g.id === preferred) || S.groups[0];
@@ -397,7 +428,7 @@ function showEventDetails(index) {
     };
     const pc = priorityColors[Number(task?.priority ?? ev.priority)] || priorityColors[2];
     const dateIcon = `<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>`;
-    const detail = `<div class="event-modal-backdrop" data-close-event><section class="event-detail task-event-detail" role="dialog" aria-modal="true" aria-label="Task details"><div class="event-detail-top"><span class="event-type task">Task due date</span><button type="button" class="icon" data-close-event aria-label="Close">✕</button></div><h2>${title}</h2><div class="task-event-date"><span class="task-event-icon" aria-hidden="true">${dateIcon}</span><div><small>Due date</small><strong>${esc(due)}</strong></div></div><div class="task-event-fields"><div class="task-detail-field priority-field" style="--field-bg:${pc.bg};--field-edge:${pc.edge};--field-text:${pc.text}"><small>Priority</small><strong>${esc(priority)}</strong></div><div class="task-detail-field assignee-field" style="--field-edge:${assigneeAccent};--field-bg:color-mix(in srgb, ${assigneeAccent} 13%, var(--card));--field-text:var(--ink)"><small>Assigned to</small><strong><span class="task-person-dot" style="background:${assigneeAccent}" aria-hidden="true"></span>${esc(member ? nm(member) : (ev.assigneeName || 'Unassigned'))}</strong></div><div class="task-detail-field status-field" style="--field-bg:${pastel.hex};--field-edge:${pastel.edge};--field-text:var(--ink)"><small>Status</small><strong><span class="task-person-dot" style="background:${pastel.edge}" aria-hidden="true"></span>${esc(status)}</strong></div></div><div class="task-event-footer"><button type="button" class="btn task-event-open" data-open-task="${esc(ev.taskId)}">View on Tasks <span aria-hidden="true">↗</span></button></div></section></div>`;
+    const detail = `<div class="event-modal-backdrop" data-close-event><section class="event-detail task-event-detail" role="dialog" aria-modal="true" aria-label="Task details"><div class="event-detail-top"><span class="event-type task">Task due date</span><button type="button" class="icon" data-close-event aria-label="Close">✕</button></div><h2>${title}</h2><div class="task-event-date"><span class="task-event-icon" aria-hidden="true">${dateIcon}</span><div><small>Due date</small><strong>${esc(due)}</strong></div></div><div class="task-event-fields"><div class="task-detail-field priority-field" style="--field-bg:${pc.bg};--field-edge:${pc.edge};--field-text:${pc.text}"><small>Priority</small><strong>${esc(priority)}</strong></div><div class="task-detail-field assignee-field" style="--field-edge:${assigneeAccent};--field-bg:color-mix(in srgb, ${assigneeAccent} 13%, var(--card));--field-text:var(--ink)"><small>Assigned to</small><strong>${esc(member ? nm(member) : (ev.assigneeName || 'Unassigned'))}</strong></div><div class="task-detail-field status-field" style="--field-bg:${pastel.hex};--field-edge:${pastel.edge};--field-text:var(--ink)"><small>Status</small><strong>${esc(status)}</strong></div></div><div class="task-event-footer"><button type="button" class="btn task-event-open" data-open-task="${esc(ev.taskId)}">View on Tasks <span aria-hidden="true">↗</span></button></div></section></div>`;
     document.querySelector('.event-modal-backdrop')?.remove();
     document.body.insertAdjacentHTML('beforeend', detail);
     document.querySelector('[data-close-event].icon')?.focus();
@@ -757,12 +788,12 @@ const onboard = () => `<div class="workspace">
   <div class="workspace-head"><span class="workspace-mark"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.5"/><path d="M3.5 19c.4-3 2.5-4.7 5.5-4.7s5.1 1.7 5.5 4.7M15 14.6c2.6-.3 4.9 1 5.5 4"/></svg></span>
     <div><h1>Your workspace</h1><p class="hint">Open one of your groups, or start a new one with your teammates.</p></div></div>
   <section class="workspace-section"><h2>Your groups <small>${S.groups.length}</small></h2>
-  ${S.groups.length ? `<div class="workspace-list">${S.groups.map((g, i) => `<button type="button" class="workspace-item h${i % 5}" data-pickgroup="${esc(g.id)}"><span class="workspace-badge">${esc(g.name.charAt(0).toUpperCase())}</span><span class="workspace-info"><strong>${esc(g.name)}</strong><small>Invite code: ${esc(g.code)}</small></span>${S.group?.id === g.id ? '<span class="tag p1">Current</span>' : ""}<span class="workspace-go" aria-hidden="true">›</span></button>`).join("")}</div>` : `<p class="empty">You’re not in a group yet. Create one or join with a code below.</p>`}</section>
+  ${S.groups.length ? `<div class="workspace-list">${S.groups.map((g, i) => `<div class="workspace-item h${i % 5}"><button type="button" class="workspace-open" data-pickgroup="${esc(g.id)}"><span class="workspace-badge">${esc(g.name.charAt(0).toUpperCase())}</span><span class="workspace-info"><strong>${esc(g.name)}</strong><small>Invite code: ${esc(g.code)}</small></span>${S.group?.id === g.id ? '<span class="tag p1">Current</span>' : ""}<span class="workspace-go" aria-hidden="true">›</span></button><div class="workspace-share"><button type="button" class="ws-share-btn" data-copy-code="${esc(g.code)}" title="Copy invite code">Copy code</button><button type="button" class="ws-share-btn" data-copy-link="${esc(g.code)}" title="Copy invite link">Copy link</button><button type="button" class="ws-share-btn ws-share-primary" data-share-link="${esc(g.code)}" title="Share group invitation">Share link</button></div></div>`).join("")}</div>` : `<p class="empty">You’re not in a group yet. Create one or join with a code below.</p>`}</section>
   <div class="workspace-actions">
     <form class="workspace-card" data-form="create"><span class="ws-ic c-sky"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><h2>Create a group</h2><p>Start a fresh space for your team.</p>
       <label class="field"><span>Group name</span><input name="name" maxlength="100" placeholder="e.g. Thesis team" required></label><button class="btn">Create group</button></form>
-    <form class="workspace-card" data-form="join"><span class="ws-ic c-blush"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8.5" cy="12" r="3.5"/><path d="M12 12h8.5M17 12v3M20.5 12v2"/></svg></span><h2>Join with a code</h2><p>Ask a teammate for their 6-character code.</p>
-      <label class="field"><span>Invite code</span><input name="code" maxlength="6" placeholder="e.g. a1b2c3" autocomplete="off" autocapitalize="off" spellcheck="false" required></label><button class="btn btn-quiet">Join group</button></form>
+    <form class="workspace-card" data-form="join"><span class="ws-ic c-blush"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8.5" cy="12" r="3.5"/><path d="M12 12h8.5M17 12v3M20.5 12v2"/></svg></span><h2>Join with a code</h2><p>${pendingInvite() ? 'Your invitation is ready. Join when you’re signed in.' : 'Ask a teammate for their 6-character code.'}</p>
+      <label class="field"><span>Invite code</span><input name="code" maxlength="6" value="${esc(pendingInvite())}" placeholder="e.g. a1b2c3" autocomplete="off" autocapitalize="off" spellcheck="false" required></label><button class="btn btn-quiet">Join group</button></form>
   </div></div>`;
 
 /* ---------- actions ---------- */
@@ -779,6 +810,19 @@ async function moveTask(id, cid) {
 }
 
 $("content").onclick = async (e) => {
+  const shareButton = e.target.closest('[data-copy-code],[data-copy-link],[data-share-link]');
+  if (shareButton) {
+    const code = shareButton.dataset.copyCode || shareButton.dataset.copyLink || shareButton.dataset.shareLink;
+    if (!S.groups.some(g => g.code === code)) return;
+    const link = inviteUrl(code);
+    if (shareButton.dataset.copyCode) return copyWorkspaceInvite(code, shareButton);
+    if (shareButton.dataset.copyLink) return copyWorkspaceInvite(link, shareButton);
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Join my Project Manager workspace', text: 'Join our group using this invitation:', url: link }); }
+      catch (err) { if (err?.name !== 'AbortError') await copyWorkspaceInvite(link, shareButton); }
+    } else await copyWorkspaceInvite(link, shareButton);
+    return;
+  }
   const t = e.target.closest("[data-open-meeting],[data-event],[data-cal-step],[data-cal-mode],[data-cal-today],[data-cal-day],[data-goto],[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol],[data-column-color],[data-toggle-palette]");
   if (!t) return;
   const ds = t.dataset;
@@ -942,10 +986,15 @@ $("content").onsubmit = async (e) => {
     return;
   }
   else if (f.dataset.form === "create") r = await db.rpc("create_group", { gname: v.name });
-  else if (f.dataset.form === "join") r = await db.rpc("join_group", { gcode: v.code });
+  else if (f.dataset.form === "join") {
+    const existing = S.groups.find(g => g.code.toLowerCase() === String(v.code).trim().toLowerCase());
+    if (existing) { clearPendingInvite(); return selectGroup(existing); }
+    r = await db.rpc("join_group", { gcode: String(v.code).trim() });
+  }
   else if (f.dataset.form === "invite") return sendInvite(f, v);
   if (r.error) return alert(r.error.message);
   if (["create", "join"].includes(f.dataset.form)) {
+    if (f.dataset.form === 'join') clearPendingInvite();
     const groupId = r.data;
     await refreshGroups();
     const target = S.groups.find((g) => g.id === groupId);

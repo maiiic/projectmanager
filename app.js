@@ -186,7 +186,9 @@ async function boot(session) {
   $("who").textContent = S.user.email || "Signed in";
   $("who-badge").textContent = (S.user.email || "?").charAt(0).toUpperCase();
   await refreshGroups();
-  if (!S.groups.length || pendingInvite()) return showGroupPicker();
+  // Preserve Manage Workspace on reload, even when a group was selected previously.
+  // Never overwrite #/workspace with #/home during initialization.
+  if (!S.groups.length || pendingInvite() || routeOf() === "workspace") return showGroupPicker();
   let preferred;
   try { preferred = localStorage.getItem(`pm-group-${S.user.id}`); } catch {}
   const selected = S.groups.find((g) => g.id === preferred) || S.groups[0];

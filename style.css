@@ -1307,12 +1307,20 @@ html[data-theme="dark"] .time-grid > .time-event.event-chip.m { border-left-colo
 html[data-theme="dark"] .time-grid > .time-event.event-chip.g { border-left-color: #4F94DC; }
 html[data-theme="dark"] .time-grid > .time-event.event-chip.t { border-left-color: #A58DD4; }
 
-.side {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-.side .side-user {
-  margin-top: auto;
+/* Manage Workspace: keep account/sign-out at the bottom of the desktop sidebar.
+   #nav may be hidden when choosing a workspace, so don't rely on its flex. */
+@media (min-width: 861px) {
+  #app-view.shell > aside.side {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+  #app-view.shell > aside.side > .account {
+    margin-top: auto !important;
+    flex-shrink: 0;
+  }
+  #app-view.shell > aside.side > #nav[hidden] {
+    display: none !important;
+  }
 }

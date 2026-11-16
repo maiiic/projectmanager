@@ -382,7 +382,7 @@ function schedule() {
     const color = safeColor(p.preferred_color);
     let markup = `<section class="person-schedule${me ? " is-mine" : ""}" style="--u:${color}"><div class="person-schedule-title"><span class="member-indicator" style="background:${color}"></span><strong>${esc(nm(p))}${me ? " (you)" : ""}</strong><small>${set.size / 2}h busy</small></div><div class="g mg${me ? " me" : ""}"><span class="mini-time-head"></span>${DAYS.map((d) => `<b>${d}</b>`).join("")}`;
     for (let s = 0; s < SLOTS; s++) {
-      markup += `<em>${s % 4 === 0 ? th(s) : ""}</em>`;
+      markup += `<em>${tl(s)}</em>`;
       for (let d = 0; d < 6; d++) {
         const busy = set.has(`${d}-${s}`);
         markup += `<i class="c${busy ? " x" : ""}" title="${esc(`${FULL[d]}, ${tl(s)} — ${busy ? "Unavailable" : "Available"}`)}"${me ? ` data-d="${d}" data-s="${s}"` : ""}></i>`;

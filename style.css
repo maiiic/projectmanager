@@ -873,3 +873,33 @@ html[data-theme="dark"] .mrow { background: var(--butter); }
 }
 /* Visible focus style for keyboard users. */
 .time-grid > .time-event.event-chip:focus-visible { outline:2px solid var(--sky-d); outline-offset:-2px; }
+
+/* Compact Week/Day calendar: reduce vertical scrolling without changing event durations. */
+.time-grid > .time-cell {
+  min-height: 32px;
+  height: 32px;
+  padding: 2px 3px;
+  box-sizing: border-box;
+}
+.time-grid > .time-label:not(.all-day-label) {
+  min-height: 32px;
+  height: 32px;
+  padding: 5px 7px 0;
+  line-height: 1.25;
+  box-sizing: border-box;
+}
+/* Keep the all-day row distinct and comfortable. */
+.time-grid > .all-day-cell { min-height: 33px; height: auto; }
+.time-grid > .time-event {
+  margin: 2px 4px;
+  padding: 5px 8px;
+  border-radius: 8px;
+}
+
+/* Invites: compact meeting-management action, matching the existing soft UI. */
+.tbl .invite-actions-heading, .tbl .invite-actions-cell { text-align: right; }
+.tbl .invite-actions-cell { width: 1%; }
+.invite-delete-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink-soft); padding: 7px 11px; font: inherit; font-size: .78rem; font-weight: 800; white-space: nowrap; cursor: pointer; transition: background .16s, color .16s, border-color .16s; }
+.invite-delete-btn .ic { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.invite-delete-btn:hover, .invite-delete-btn:focus-visible { color: #a63b58; border-color: #f3c5d2; background: #fff0f4; }
+.invite-delete-btn:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }

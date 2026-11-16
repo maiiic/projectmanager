@@ -583,6 +583,13 @@ function gbar() {
     ${S.gerr ? `<small class="bad">${esc(S.gerr)}</small>` : ""}</div>`;
 }
 
+function showMeetingFromInvites(meetingId) {
+  if (!S.meetings.some(m => String(m.id) === String(meetingId))) return;
+  collectCalendarItems();
+  const index = S.calendarItems.findIndex(ev => ev.type === 'meeting' && String(ev.meetingId) === String(meetingId));
+  if (index >= 0) showEventDetails(index);
+}
+
 function invites() {
   const rows = [...S.meetings].sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
   const cal = S.gcals.find((c) => c.id === S.group.gcal_id)?.summary || "your primary calendar";
@@ -600,7 +607,7 @@ function invites() {
     <p id="inv-msg" class="message" role="status" hidden></p>
     <div class="actions"><button class="btn">Send invites</button></div>
   </form>
-  <section class="panel"><h2>Scheduled meetings <small>${rows.length}</small></h2>${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Status</th><th>Meeting</th><th>Date &amp; time</th><th>People emailed</th></tr></thead><tbody>${rows.map((x) => `<tr><td><span class="pill p1">Sent</span></td><td><span class="mt"><i class="dot c1"></i>${esc(x.title)}</span></td><td>${esc(when(x))}</td><td title="${esc((x.emails || []).join(", "))}">${(x.emails || []).length} ${(x.emails || []).length === 1 ? "person" : "people"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">No meetings scheduled yet.</p>'}</section>`;
+  <section class="panel"><h2>Scheduled meetings <small>${rows.length}</small></h2>${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Status</th><th>Meeting</th><th>Date &amp; time</th><th>People emailed</th><th class="invite-actions-heading">Actions</th></tr></thead><tbody>${rows.map((x) => `<tr><td><span class="pill p1">Sent</span></td><td><span class="mt"><i class="dot c1"></i>${esc(x.title)}</span></td><td>${esc(when(x))}</td><td title="${esc((x.emails || []).join(", "))}">${(x.emails || []).length} ${(x.emails || []).length === 1 ? "person" : "people"}</td><td class="invite-actions-cell"><button type="button" class="invite-delete-btn" data-open-meeting="${esc(x.id)}" aria-label="Manage or delete ${esc(x.title)}" title="Manage or delete meeting"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7m4-7v7"/></svg><span>Delete</span></button></td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">No meetings scheduled yet.</p>'}</section>`;
 }
 
 async function sendInvite(f, v) {
@@ -645,11 +652,11 @@ async function manageMeeting(meetingId, action) {
   buttons.forEach(button => button.disabled = true);
   if (status) { status.hidden = false; status.textContent = silent ? 'Canceling without notification emails…' : cancel ? 'Canceling and notifying guests…' : 'Removing from site…'; }
   try {
-    await calendarBackend({action: silent ? 'cancelMeetingSilent' : cancel ? 'cancelMeeting' : 'removeMeeting', meetingId: String(meetingId)});
+    const result = await calendarBackend({action: silent ? 'cancelMeetingSilent' : cancel ? 'cancelMeeting' : 'removeMeeting', meetingId: String(meetingId)});
     document.querySelector('.event-modal-backdrop')?.remove();
     await load(true);
     if (S.gtoken) { await gload(); draw(); }
-    alert(silent ? 'Meeting canceled. Cancellation emails were not requested.' : cancel ? 'Meeting canceled. Google Calendar was asked to notify all guests.' : 'Meeting removed from Project Manager. Google Calendar was not changed.');
+    alert(result.alreadyDeletedInGoogle ? 'The Google Calendar event had already been deleted. Its leftover Project Manager record has been removed. No new cancellation notification was sent.' : silent ? 'Meeting canceled. Cancellation emails were not requested.' : cancel ? 'Meeting canceled. Google Calendar was asked to notify all guests.' : 'Meeting removed from Project Manager. Google Calendar was not changed.');
   } catch (error) {
     if (status) status.textContent = error.message || 'Unable to update meeting.';
     buttons.forEach(button => button.disabled = false);
@@ -711,9 +718,10 @@ async function moveTask(id, cid) {
 }
 
 $("content").onclick = async (e) => {
-  const t = e.target.closest("[data-event],[data-cal-step],[data-cal-mode],[data-cal-today],[data-cal-day],[data-goto],[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
+  const t = e.target.closest("[data-open-meeting],[data-event],[data-cal-step],[data-cal-mode],[data-cal-today],[data-cal-day],[data-goto],[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
   if (!t) return;
   const ds = t.dataset;
+  if (ds.openMeeting !== undefined) return showMeetingFromInvites(ds.openMeeting);
   if (ds.event !== undefined) return showEventDetails(ds.event);
   if (ds.calMode) { S.calendarMode=ds.calMode; if(S.calendarMode==='month') S.month=new Date(S.calendarDate.getFullYear(),S.calendarDate.getMonth(),1); draw(); if(S.gtoken){await gload();draw();} return; }
   if (ds.calDay) { S.calendarDate=new Date(ds.calDay+'T12:00:00'); S.calendarMode='day'; draw(); if(S.gtoken){await gload();draw();} return; }

@@ -11,7 +11,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = (n) => String(n).padStart(2, "0");
 const now = new Date();
-const S = { user: null, groups: [], choosingGroup: false, group: null, members: [], tasks: [], busy: [], meetings: [], mine: new Set(), dirty: false, view: "home", month: new Date(now.getFullYear(), now.getMonth(), 1), sub: false, cols: [], doneIds: new Set(), dragging: false, gtoken: null, gcals: [], gevents: [], gerr: "", calendarMode: "month", calendarDate: new Date(), calendarItems: [] };
+const S = { user: null, groups: [], choosingGroup: false, group: null, members: [], tasks: [], busy: [], meetings: [], mine: new Set(), dirty: false, view: "home", month: new Date(now.getFullYear(), now.getMonth(), 1), sub: false, cols: [], doneIds: new Set(), dragging: false, pendingTaskFocus: null, gtoken: null, gcals: [], gevents: [], gerr: "", calendarMode: "month", calendarDate: new Date(), calendarItems: [] };
 const DAYS = ["M", "T", "W", "Th", "F", "S"], SLOTS = 32, PR = ["", "Low", "Medium", "High"];
 const FIELDS = [
   ["role", "Role", "text", "e.g. Designer, Developer"],
@@ -48,7 +48,7 @@ const columnStyle = (column, index = 0) => {
 };
 const safeColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase())?.hex || COLORS[0].hex;
 // Preserve stored profile colors; soften only the displayed yellow accent.
-const displayAccent = (hex) => String(hex).toLowerCase() === "#d4aa00" ? "#F4C84E" : hex;
+const displayAccent = (hex) => String(hex).toLowerCase() === "#d4aa00" ? "#F6C541" : hex;
 const applyTheme = (value) => { document.documentElement.dataset.theme = value === "dark" ? "dark" : "light"; };
 const meProfile = () => S.members.find((p) => p.id === S.user?.id);
 const myTheme = () => meProfile()?.theme || "light";
@@ -286,6 +286,16 @@ function draw() {
   if (S.choosingGroup) return showGroupPicker();
   document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("is-active", b.dataset.go === S.view));
   $("content").innerHTML = { home, tasks, schedule, invites, directory, settings }[S.view]();
+  if (S.view === 'tasks' && S.pendingTaskFocus) {
+    const taskId = S.pendingTaskFocus;
+    S.pendingTaskFocus = null;
+    const target = [...document.querySelectorAll('.board .tcard')].find(card => card.dataset.id === taskId);
+    if (target) {
+      target.classList.add('task-jump-highlight');
+      requestAnimationFrame(() => target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }));
+      setTimeout(() => target.classList.remove('task-jump-highlight'), 2400);
+    }
+  }
 }
 
 // Read-only calendar UI. Events are displayed from existing Supabase + Google data.
@@ -295,7 +305,7 @@ const niceTime = (v) => v ? new Date(v).toLocaleTimeString([], {hour: 'numeric',
 function collectCalendarItems() {
   const meetings = S.meetings.map(m => ({type:'meeting', meetingId:m.id, gcalEventId:m.gcal_event_id || null, title:m.title || 'Meeting', date:dayKey(new Date(m.starts_at)), start:m.starts_at, end:m.ends_at, description:m.description || '', emails:m.emails || [], url:'', location:'', allDay:false}));
   const googleEvents = S.gevents.filter(g => !S.meetings.some(m => m.gcal_event_id && m.gcal_event_id === g.id)).map(g => ({...g, type:'google', date:g.day}));
-  const dueTasks = S.tasks.filter(t => t.due && !isDone(t)).map(t => ({type:'task', title:t.title, date:t.due, allDay:true, description:`Priority: ${PR[t.priority] || 'Normal'} · Assigned to: ${who(t)}`, url:''}));
+  const dueTasks = S.tasks.filter(t => t.due && !isDone(t)).map(t => ({type:'task', taskId:t.id, columnId:t.column_id, priority:t.priority, assigneeName:who(t), title:t.title, date:t.due, allDay:true, description:'', url:''}));
   S.calendarItems = [...meetings, ...googleEvents, ...dueTasks];
   return S.calendarItems;
 }
@@ -369,6 +379,17 @@ function showEventDetails(index) {
   const attendees=Array.isArray(ev.attendees)&&ev.attendees.length ? ev.attendees.map(a=>a.email||a.displayName).filter(Boolean).join(', ') : Array.isArray(ev.emails)?ev.emails.join(', '):'';
   const meet=typeof ev.meetLink==='string' && /^https:\/\//.test(ev.meetLink)?ev.meetLink:'';
   const link=typeof ev.url==='string' && /^https:\/\//.test(ev.url)?ev.url:'';
+  if (ev.type === 'task') {
+    const due = new Date(`${ev.date}T12:00:00`).toLocaleDateString([], {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+    const column = S.cols.find(c => c.id === ev.columnId);
+    const priority = PR[ev.priority] || 'Normal';
+    const status = column?.name || 'Unassigned';
+    const detail = `<div class="event-modal-backdrop" data-close-event><section class="event-detail task-event-detail" role="dialog" aria-modal="true" aria-label="Task details"><div class="event-detail-top"><span class="event-type task">Task due date</span><button type="button" class="icon" data-close-event aria-label="Close">✕</button></div><h2>${title}</h2><div class="task-event-date"><span class="task-event-icon" aria-hidden="true">▦</span><div><small>Due date</small><strong>${esc(due)}</strong></div></div><div class="task-event-fields"><div><small>Priority</small><strong>${esc(priority)}</strong></div><div><small>Assigned to</small><strong>${esc(ev.assigneeName || 'Unassigned')}</strong></div><div><small>Column</small><strong>${esc(status)}</strong></div></div><div class="task-event-footer"><button type="button" class="btn task-event-open" data-open-task="${esc(ev.taskId)}">View on Tasks <span aria-hidden="true">↗</span></button></div></section></div>`;
+    document.querySelector('.event-modal-backdrop')?.remove();
+    document.body.insertAdjacentHTML('beforeend', detail);
+    document.querySelector('[data-close-event].icon')?.focus();
+    return;
+  }
   const controls = ev.type === 'meeting' && ev.meetingId
     ? `<div class="event-actions"><h3>Manage meeting</h3><p class="event-action-hint">Choose whether to remove this meeting only from the site or cancel its Google Calendar event with or without cancellation emails.</p><button type="button" class="btn btn-quiet meeting-action" data-meeting-id="${esc(ev.meetingId)}" data-meeting-action="remove">Remove from site only</button>${ev.gcalEventId ? `<button type="button" class="btn meeting-cancel meeting-action" data-meeting-id="${esc(ev.meetingId)}" data-meeting-action="cancelSilent">Cancel without sending email</button><button type="button" class="btn meeting-cancel meeting-action" data-meeting-id="${esc(ev.meetingId)}" data-meeting-action="cancel">Cancel &amp; notify guests</button>` : ''}<p class="meeting-action-status" role="status" hidden></p></div>`
     : '';
@@ -943,6 +964,15 @@ db.auth.onAuthStateChange((_e, session) => {
 });
 // Event dialog dismissal, independent of the app content re-render.
 document.addEventListener('click', (e) => {
+  const jump = e.target.closest('[data-open-task]');
+  if (jump) {
+    const taskId = jump.dataset.openTask;
+    if (!S.tasks.some(t => t.id === taskId)) return;
+    S.pendingTaskFocus = taskId;
+    document.querySelector('.event-modal-backdrop')?.remove();
+    navigate('tasks');
+    return;
+  }
   const action = e.target.closest('[data-meeting-action]');
   if (action) { manageMeeting(action.dataset.meetingId, action.dataset.meetingAction); return; }
   if (e.target.matches('[data-close-event]')) document.querySelector('.event-modal-backdrop')?.remove();

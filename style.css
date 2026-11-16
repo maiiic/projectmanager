@@ -1145,3 +1145,28 @@ html[data-theme="dark"] .panel .mrow {
 html[data-theme="dark"] .panel .mrow .dtile { background:#43323A; color:#FFD8D7; }
 html[data-theme="dark"] .panel .mrow .dtile small,
 html[data-theme="dark"] .panel .mrow div small { color:#F0B9BE; }
+
+/* Task detail pop-up: aligned with cream cards and lavender task calendar events. */
+.task-event-detail { width:min(100%,470px); padding:26px; border-radius:24px; }
+.task-event-detail .event-type.task { background:#F0E9FB; color:#765998; }
+.task-event-detail h2 { font-size:1.45rem; line-height:1.3; margin:20px 0; }
+.task-event-date { display:flex; align-items:center; gap:14px; background:#F5F0FC; padding:15px 16px; border-left:5px solid #AD93D8; border-radius:14px; }
+.task-event-icon { display:grid; place-items:center; width:36px; height:36px; flex:none; border-radius:11px; color:#765998; background:#E7DCF8; font-size:1.15rem; }
+.task-event-date small,.task-event-fields small { display:block; font-size:.72rem; font-weight:700; color:var(--ink-soft); margin-bottom:4px; }
+.task-event-date strong,.task-event-fields strong { font-weight:800; font-size:.92rem; }
+.task-event-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; margin-top:12px; }
+.task-event-fields>div { min-width:0; padding:13px 12px; border:1px solid var(--line); background:var(--sand); border-radius:12px; overflow-wrap:anywhere; }
+.task-event-footer { display:flex; justify-content:flex-end; margin-top:22px; }
+.task-event-open { background:#EDE5FA; color:#654D90; border:0; padding:11px 18px; border-radius:999px; }
+.task-event-open:hover { background:#E1D4F4; }
+.task-jump-highlight { outline:3px solid #9C80D1 !important; outline-offset:3px; box-shadow:0 0 0 6px #EEE9FA; }
+/* Stronger butter-yellow accent, without introducing mustard tones. */
+.board .column-color-trigger[style], .board .column-color-trigger { min-width:14px; min-height:14px; }
+.board .col[style*="--column-edge:#FFDC7A"] { --column-edge:#F7BE3D !important; }
+.load[style*="--u:#F6C541"] progress.work::-webkit-progress-value { background:#F7C84F; }
+.load[style*="--u:#F6C541"] progress.work::-moz-progress-bar { background:#F7C84F; }
+@media (max-width:520px) { .task-event-fields { grid-template-columns:1fr 1fr; } .task-event-detail { padding:20px; } }
+html[data-theme="dark"] .task-event-date { background:#3F354E; border-left-color:#B49ADE; }
+html[data-theme="dark"] .task-event-icon { background:#554466; color:#E3D5FF; }
+html[data-theme="dark"] .task-event-fields>div { background:var(--fill); }
+html[data-theme="dark"] .task-event-open { background:#4B3A64; color:#E8D7FF; }

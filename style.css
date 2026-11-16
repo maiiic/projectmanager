@@ -1162,7 +1162,7 @@ html[data-theme="dark"] .panel .mrow div small { color:#F0B9BE; }
 .task-jump-highlight { outline:3px solid #9C80D1 !important; outline-offset:3px; box-shadow:0 0 0 6px #EEE9FA; }
 /* Stronger butter-yellow accent, without introducing mustard tones. */
 .board .column-color-trigger[style], .board .column-color-trigger { min-width:14px; min-height:14px; }
-.board .col[style*="--column-edge:#FFDC7A"] { --column-edge:#FBCB58 !important; }
+.board .col[style*="--column-edge:#FFDC7A"] { --column-edge:#F7BE3D !important; }
 .load[style*="--u:#F6C541"] progress.work::-webkit-progress-value { background:#F7C84F; }
 .load[style*="--u:#F6C541"] progress.work::-moz-progress-bar { background:#F7C84F; }
 @media (max-width:520px) { .task-event-fields { grid-template-columns:1fr 1fr; } .task-event-detail { padding:20px; } }
@@ -1170,3 +1170,106 @@ html[data-theme="dark"] .task-event-date { background:#3F354E; border-left-color
 html[data-theme="dark"] .task-event-icon { background:#554466; color:#E3D5FF; }
 html[data-theme="dark"] .task-event-fields>div { background:var(--fill); }
 html[data-theme="dark"] .task-event-open { background:#4B3A64; color:#E8D7FF; }
+
+/* Task event modal: semantic colors from task priority, member and column. */
+.task-event-icon svg {display:block; width:21px; height:21px;}
+.task-event-fields > .task-detail-field {
+  background:var(--field-bg, var(--sand));
+  border:1px solid color-mix(in srgb, var(--field-edge) 22%, var(--line));
+  border-left:4px solid var(--field-edge);
+  color:var(--field-text, var(--ink));
+  padding-left:12px;
+}
+.task-event-fields .task-detail-field strong { color:var(--field-text, var(--ink)); display:flex; align-items:center; gap:7px; }
+.task-event-fields .task-detail-field small { color:color-mix(in srgb, var(--field-text, var(--ink)) 75%, var(--ink-soft)); }
+.task-person-dot { display:inline-block; width:9px; height:9px; border-radius:50%; flex:none; }
+html[data-theme="dark"] .task-event-fields > .task-detail-field {
+  background:color-mix(in srgb, var(--field-edge) 18%, var(--card));
+  color:var(--ink);
+  border-left-color:var(--field-edge);
+}
+html[data-theme="dark"] .task-event-fields .task-detail-field strong,
+html[data-theme="dark"] .task-event-fields .task-detail-field small { color:var(--ink); }
+/* Middle-ground golden yellow rather than overly saturated mustard. */
+.board .col[style*="--column-edge:#FFDC7A"] { --column-edge:#FBCB58 !important; }
+
+/* Task details: cream information cards with colored oval values. */
+.task-event-fields > .task-detail-field {
+  background: #FFFCF5;
+  border: 1px solid #EEE8DD;
+  border-radius: 14px;
+  padding: 13px 12px;
+  color: var(--ink);
+}
+.task-event-fields .task-detail-field small {
+  color: var(--ink-soft);
+  margin-bottom: 9px;
+}
+.task-event-fields .task-detail-field strong {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--field-edge) 19%, #FFFFFF);
+  color: var(--field-text, var(--ink));
+  font-size: .83rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.task-event-fields .task-detail-field.assignee-field strong,
+.task-event-fields .task-detail-field.status-field strong {
+  color: var(--ink);
+}
+html[data-theme="dark"] .task-event-fields > .task-detail-field {
+  background: var(--card);
+  border-color: var(--line);
+}
+html[data-theme="dark"] .task-event-fields .task-detail-field strong {
+  background: color-mix(in srgb, var(--field-edge) 32%, var(--card));
+  color: var(--ink);
+}
+
+/* Task calendar pop-up: cream cards, colored left accents, pastel value pills */
+.task-event-detail .task-event-fields > .task-detail-field {
+  background: #FFFCF5;
+  border: 1px solid #EEE8DD;
+  border-left: 5px solid var(--field-edge, #AD93D8);
+  border-radius: 14px;
+  padding: 13px 12px;
+  color: var(--ink);
+}
+.task-event-detail .task-event-fields .task-detail-field small {
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+}
+.task-event-detail .task-event-fields .task-detail-field strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: var(--field-bg, #EEE9FA);
+  color: var(--field-text, var(--ink));
+  font-size: .83rem;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.task-event-detail .task-event-fields .task-detail-field.assignee-field strong,
+.task-event-detail .task-event-fields .task-detail-field.status-field strong {
+  color: var(--ink);
+}
+html[data-theme="dark"] .task-event-detail .task-event-fields > .task-detail-field {
+  background: var(--card);
+  border-color: var(--line);
+  border-left-color: var(--field-edge, #AD93D8);
+}
+html[data-theme="dark"] .task-event-detail .task-event-fields .task-detail-field strong {
+  background: color-mix(in srgb, var(--field-edge) 25%, var(--card));
+  color: var(--ink);
+}

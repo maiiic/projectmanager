@@ -495,7 +495,7 @@ function gbar() {
   const opts = S.gcals.map((c) => `<option value="${esc(c.id)}"${c.id === S.group.gcal_id ? " selected" : ""}>${esc(c.summary)}</option>`).join("");
   return `<div class="gbar">${S.gtoken
     ? `<span class="tag p1">Google connected</span><select data-gcal aria-label="Group calendar"><option value="">Pick the group’s calendar</option>${opts}</select>`
-    : `<button type="button" class="btn" data-act="gconnect">Connect Google Calendar</button>${S.group.gcal_id ? "<small>Your group has a shared calendar. Connect to show it here.</small>" : ""}`}
+    : `<button type="button" class="btn" data-act="gconnect">Connect Google Calendar</button>`
     ${S.gerr ? `<small class="bad">${esc(S.gerr)}</small>` : ""}</div>`;
 }
 

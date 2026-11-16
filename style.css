@@ -745,59 +745,89 @@ html[data-theme="dark"] .p-av { background:var(--u-dark); color:#fff; }
 @media(max-width:860px) { .group-menu { position:fixed; top:125px; left:12px; right:auto; width:min(280px,calc(100vw - 24px)); } .color-options { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media(max-width:500px) { .color-options { grid-template-columns:repeat(2,minmax(0,1fr)); } .meeting-list-extra { align-items:end; } .meeting-list-item { flex-wrap:wrap; } }
 
-/* Balanced pastel adjustment: preserve original card and status colors.
-   Only warm overly saturated accents are softened. */
-:root { --butter-d: #e6c66f; }
 
-
-/* Balanced pastel palette: lively but not saturated.
-   Keep existing card backgrounds and urgency hierarchy intact. */
+/* =====================================================================
+   ALL-PASTEL PALETTE — muted highlights, no vivid amber or neon accents.
+   Preserve contrast through darker text, not saturated backgrounds.
+   ===================================================================== */
 :root {
-  --sky-d: #82b9e5;
-  --teal-d: #67bdab;
-  --blush-d: #e9a1b8;
-  --butter-d: #dec878;
-  --lilac-d: #b0a0e4;
-  --meeting-bg: #fff3cf;
-  --meeting-ink: #856522;
+  --teal: #e9f6f1; --teal-b: #d0e9df; --teal-d: #91c7b6; --teal-t: #356c5d;
+  --sky: #eaf3fb; --sky-d: #a9cdeb; --sky-t: #496d8a;
+  --blush: #fbeef2; --blush-d: #eeb9cc; --blush-t: #8e5268;
+  --butter: #fcf6df; --butter-d: #ecdaa2; --butter-t: #7f6a36;
+  --lilac: #f2effa; --lilac-d: #c9bcea; --lilac-t: #6b5b8b;
+  --danger: #9c5365;
+  --meeting-bg: #fff9e9; --meeting-ink: #846d42;
 }
-/* Preserve the soft pastel task cards, while giving status colors clarity. */
-.cal i.today { background: #fff0b9; border-color: #eadb9b; color: #795f23; }
-.chip.m, .meeting-row { background: var(--meeting-bg); }
-.meeting-date-mark { background: #f9e6ad; color: #775b23; }
-.pressing-row.urgency-today { background: #ffeed7; }
-.pressing-row.urgency-soon { background: #fff6df; }
-.progress, progress::-webkit-progress-value { accent-color: #9ad6c4; }
-progress::-webkit-progress-value { background: #98d8c5; }
-progress::-moz-progress-bar { background: #98d8c5; }
-progress.work::-webkit-progress-value { background: #a3cfed; }
-progress.work::-moz-progress-bar { background: #a3cfed; }
-
-
-/* Butter pastel refinement — soft but still distinctly colorful. */
-:root {
-  --sky: #e7f2fc;
-  --sky-d: #9cc8e9;
-  --teal: #e3f5ef;
-  --teal-d: #91cebb;
-  --blush: #fbe9f1;
-  --blush-d: #e9b4c9;
-  --butter: #fff4cb;
-  --butter-b: #f5e7aa;
-  --butter-d: #ead58e;
-  --butter-t: #78652d;
-  --lilac: #f0eafb;
-  --lilac-d: #c5b5e9;
-  --meeting-bg: #fff5d7;
-  --meeting-ink: #80672d;
+/* Gently tinted, cohesive dashboard and navigation */
+.logo { background:#eaf5ef; color:#487b6a; }
+.s1 { background:#edf5fb; color:#496d8a; }
+.s2 { background:#fcf7e8; color:#806e46; }
+.s3 { background:#fbeef1; color:#916276; }
+.s4 { background:#eaf6f0; color:#477963; }
+#nav [data-go="home"] .ic { color:#8dbadc; }
+#nav [data-go="tasks"] .ic { color:#df9fb8; }
+#nav [data-go="schedule"] .ic { color:#8ec7b4; }
+#nav [data-go="directory"] .ic { color:#d9bf83; }
+#nav [data-go="invites"] .ic { color:#c6b2de; }
+#nav [data-go="settings"] .ic { color:#bdaee0; }
+#nav [data-go="home"].is-active { background:#edf5fb; color:#496d8a; }
+#nav [data-go="tasks"].is-active { background:#fbeef2; color:#8e5268; }
+#nav [data-go="schedule"].is-active { background:#eaf6f0; color:#356c5d; }
+#nav [data-go="directory"].is-active { background:#fcf6df; color:#7f6a36; }
+#nav [data-go="invites"].is-active, #nav [data-go="settings"].is-active { background:#f2effa; color:#6b5b8b; }
+.col { background:#eaf3fb; }
+.col:nth-child(5n+2) { background:#fcf6df; }
+.col:nth-child(5n+3) { background:#e9f6f1; }
+.col:nth-child(5n+4) { background:#fbeef2; }
+.col:nth-child(5n+5) { background:#f2effa; }
+.col h2::before { background:#a9cdeb; }
+.col:nth-child(5n+2) h2::before { background:#e4cf92; }
+.col:nth-child(5n+3) h2::before { background:#9ccfbd; }
+.col:nth-child(5n+4) h2::before { background:#eab1c6; }
+.col:nth-child(5n+5) h2::before { background:#c9bcea; }
+.cal i.today { background:#fcf7e2; border-color:#ecdfb8; color:#7b6840; }
+.chip.m, .today .chip.m { background:#fbf2d6; color:#806b3c; }
+.pressing-row.urgency-late { background:#f9edf0; }
+.pressing-row.urgency-today { background:#fff3e9; }
+.pressing-row.urgency-soon { background:#fcf8e9; }
+.pressing-row.urgency-normal { background:#f7f7f4; }
+.pressing-row.urgency-late .due { color:#99576b; }
+.pressing-row.urgency-today .due { color:#916d4f; }
+.pressing-row.urgency-soon .due { color:#857548; }
+.meeting-row { background:#fff9eb; }
+.meeting-row .due { color:#87734e; }
+.meeting-list-item { background:#fffaf0; border-color:#f1ead9; }
+.meeting-date-mark { background:#f9edc8; color:#776443; }
+.meeting-status { background:#eaf6ee; color:#45755c; }
+progress, progress::-webkit-progress-bar { background:#f3f1ec; }
+progress::-webkit-progress-value { background:#b8ddcd; }
+progress::-moz-progress-bar { background:#b8ddcd; }
+progress.work::-webkit-progress-value { background:#c1dbee; }
+progress.work::-moz-progress-bar { background:#c1dbee; }
+/* Individual member color is now stored as a pastel; don't darken the swatch. */
+.color-swatch { background:var(--u); border-color:color-mix(in srgb,var(--u) 76%,#b3a99f); }
+.color-option:has(input:checked) { background:color-mix(in srgb,var(--u) 30%,#fffefa); border-color:color-mix(in srgb,var(--u) 76%,#a8a49c); }
+.schedule-track .mg .c.x { background:var(--u); border-color:color-mix(in srgb,var(--u) 70%,#9c9c9c); }
+.person-schedule-title { background:color-mix(in srgb,var(--u) 43%,#fffefa); }
+.member-indicator { background:var(--u); }
+.p-av { background:var(--u); color:#364552; }
+/* Overview still has its three status states, simply softened. */
+.schedule-track .ov .c.l0 { background:#f9eaed; color:#995468; }
+.schedule-track .ov .c.l2 { background:#fff; color:#587b91; }
+.schedule-track .ov .c.l4 { background:#eaf6ef; color:#47785e; }
+.schedule-best .tag, .best .tag { background:#e9f6f1; color:#356c5d; }
+/* Muted, non-neon dark-mode counterparts */
+html[data-theme="dark"] {
+  --teal:#29463e; --teal-t:#c4e1d4; --teal-d:#80b4a1;
+  --sky:#304558; --sky-t:#c3dcf0; --sky-d:#9abbd8;
+  --blush:#4c3942; --blush-t:#f3cedd; --blush-d:#d6a6b8;
+  --butter:#4c4635; --butter-t:#f0dfb2; --butter-d:#dbc891;
+  --lilac:#433d50; --lilac-t:#e0d4f2; --lilac-d:#bcadd6;
+  --meeting-bg:#464033; --meeting-ink:#f0deb6;
 }
-/* Butter-yellow replaces saturated gold in meeting and date treatments. */
-.cal i.today { background: #fff1bf; border-color: #f2dfa4; color: #79612c; }
-.meeting-date-mark { background: #fff0be; color: #79622f; }
-.meeting-list-item { background: #fffaf0; border-color: #f2e7cb; }
-.chip.m, .meeting-row { background: var(--meeting-bg); color: var(--meeting-ink); }
-.pressing-row.urgency-today { background: #fff2dd; }
-.pressing-row.urgency-soon { background: #fff8e8; }
-/* Gentle dark-mode complements without making the main theme overly vivid. */
-html[data-theme="dark"] .cal i.today { background:#50462d; border-color:#736443; color:#f8e4a8; }
-html[data-theme="dark"] .meeting-date-mark { background:#574a30; color:#f7e4aa; }
+html[data-theme="dark"] .color-swatch { background:var(--u-dark); border-color:color-mix(in srgb,var(--u) 60%,#59616b); }
+html[data-theme="dark"] .color-option:has(input:checked) { background:color-mix(in srgb,var(--u-dark) 45%,var(--card)); border-color:var(--u); }
+html[data-theme="dark"] .schedule-track .mg .c.x { background:var(--u-dark); border-color:color-mix(in srgb,var(--u) 60%,var(--card)); }
+html[data-theme="dark"] .meeting-date-mark { background:#514732; color:#f2ddb0; }
+html[data-theme="dark"] .cal i.today { background:#514a36; color:#f3e4bd; border-color:#796c4f; }

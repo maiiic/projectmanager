@@ -384,7 +384,20 @@ function showEventDetails(index) {
     const column = S.cols.find(c => c.id === ev.columnId);
     const priority = PR[ev.priority] || 'Normal';
     const status = column?.name || 'Unassigned';
-    const detail = `<div class="event-modal-backdrop" data-close-event><section class="event-detail task-event-detail" role="dialog" aria-modal="true" aria-label="Task details"><div class="event-detail-top"><span class="event-type task">Task due date</span><button type="button" class="icon" data-close-event aria-label="Close">✕</button></div><h2>${title}</h2><div class="task-event-date"><span class="task-event-icon" aria-hidden="true">▦</span><div><small>Due date</small><strong>${esc(due)}</strong></div></div><div class="task-event-fields"><div><small>Priority</small><strong>${esc(priority)}</strong></div><div><small>Assigned to</small><strong>${esc(ev.assigneeName || 'Unassigned')}</strong></div><div><small>Column</small><strong>${esc(status)}</strong></div></div><div class="task-event-footer"><button type="button" class="btn task-event-open" data-open-task="${esc(ev.taskId)}">View on Tasks <span aria-hidden="true">↗</span></button></div></section></div>`;
+    // These colors come from the actual task, saved user profile, and saved column.
+    const task = S.tasks.find(t => String(t.id) === String(ev.taskId));
+    const member = S.members.find(m => m.id === task?.assignee);
+    const colIndex = S.cols.findIndex(c => c.id === task?.column_id);
+    const pastel = columnPastel(column, colIndex < 0 ? 0 : colIndex);
+    const assigneeAccent = member ? displayAccent(safeColor(member.preferred_color)) : '#85929e';
+    const priorityColors = {
+      3: { bg: '#FCE8EB', edge: '#D76778', text: '#9C344C' },
+      2: { bg: '#FFF3D6', edge: '#FBCB58', text: '#85600D' },
+      1: { bg: '#E4F3E7', edge: '#62AE7A', text: '#2E7450' }
+    };
+    const pc = priorityColors[Number(task?.priority ?? ev.priority)] || priorityColors[2];
+    const dateIcon = `<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>`;
+    const detail = `<div class="event-modal-backdrop" data-close-event><section class="event-detail task-event-detail" role="dialog" aria-modal="true" aria-label="Task details"><div class="event-detail-top"><span class="event-type task">Task due date</span><button type="button" class="icon" data-close-event aria-label="Close">✕</button></div><h2>${title}</h2><div class="task-event-date"><span class="task-event-icon" aria-hidden="true">${dateIcon}</span><div><small>Due date</small><strong>${esc(due)}</strong></div></div><div class="task-event-fields"><div class="task-detail-field priority-field" style="--field-bg:${pc.bg};--field-edge:${pc.edge};--field-text:${pc.text}"><small>Priority</small><strong>${esc(priority)}</strong></div><div class="task-detail-field assignee-field" style="--field-edge:${assigneeAccent};--field-bg:color-mix(in srgb, ${assigneeAccent} 13%, var(--card));--field-text:var(--ink)"><small>Assigned to</small><strong><span class="task-person-dot" style="background:${assigneeAccent}" aria-hidden="true"></span>${esc(member ? nm(member) : (ev.assigneeName || 'Unassigned'))}</strong></div><div class="task-detail-field status-field" style="--field-bg:${pastel.hex};--field-edge:${pastel.edge};--field-text:var(--ink)"><small>Status</small><strong><span class="task-person-dot" style="background:${pastel.edge}" aria-hidden="true"></span>${esc(status)}</strong></div></div><div class="task-event-footer"><button type="button" class="btn task-event-open" data-open-task="${esc(ev.taskId)}">View on Tasks <span aria-hidden="true">↗</span></button></div></section></div>`;
     document.querySelector('.event-modal-backdrop')?.remove();
     document.body.insertAdjacentHTML('beforeend', detail);
     document.querySelector('[data-close-event].icon')?.focus();

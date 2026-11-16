@@ -771,3 +771,22 @@ html[data-theme="dark"] .mrow { background: var(--butter); }
   text-align: right;
   padding-right: 6px;
 }
+
+.auth-legal {
+  margin: 18px 0 0;
+  color: #819095;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.auth-legal a {
+  color: #568D91;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-legal a:hover {
+  color: #267969;
+}

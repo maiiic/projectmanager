@@ -298,7 +298,7 @@ function collectCalendarItems() {
   return S.calendarItems;
 }
 function calChip(item, index) {
-  const cls = item.type === 'meeting' ? 'm' : item.type === 'google' ? 'g' : '';
+  const cls = item.type === 'meeting' ? 'm' : item.type === 'google' ? 'g' : 't';
   return `<button type="button" class="chip ${cls} event-chip" data-event="${index}" title="${esc(item.title)}">${esc(item.title)}</button>`;
 }
 function calendar() {
@@ -352,7 +352,7 @@ function calendar() {
         const endSlot = Math.ceil(last / 30);
         const topOffset = (first - startSlot * 30) / 30 * 100;
         const bottomOffset = (endSlot * 30 - last) / 30 * 100;
-        const cls = ev.type === 'meeting' ? 'm' : ev.type === 'google' ? 'g' : '';
+        const cls = ev.type === 'meeting' ? 'm' : ev.type === 'google' ? 'g' : 't';
         h += `<button type="button" class="chip ${cls} event-chip time-event" data-event="${index}" title="${esc(ev.title)}" style="grid-column:${dayIndex + 2};grid-row:${startSlot + 3} / span ${endSlot - startSlot};margin-top:${2 + topOffset * .32}px;margin-bottom:${2 + bottomOffset * .32}px">${esc(ev.title)}</button>`;
       });
     });

@@ -1035,3 +1035,57 @@ html[data-theme="dark"] .board .tcard { background:#36342f !important; border-co
   font-size:.81rem; line-height:1.4; font-weight:800; white-space:nowrap; }
 html[data-theme="dark"] .tbl tbody tr.meeting-row td { background:#36342f; }
 html[data-theme="dark"] .tbl tbody tr.meeting-row:hover td { background:#424037; }
+
+
+/* === 2026-11-16: peach meeting, lavender task, compact Invites ===
+   Semantic calendar colors: site meetings = peach pink, Google = blue, tasks = lavender. */
+.cal-date .event-chip.m,
+.time-cell .event-chip.m,
+.time-grid > .time-event.m {
+  background:#FBE8E5; color:#8A4C52; border-left-color:#E5A0A2;
+}
+.cal-date.today .event-chip.m { background:#F7DDDB; }
+.cal-date .event-chip.t,
+.time-cell .event-chip.t,
+.time-grid > .time-event.t {
+  background:#EEE9FA; color:#65538F; border-left-color:#A58DD4;
+}
+/* The month view and all-day task chips use the same category color. */
+.cal-date .event-chip:not(.m):not(.g),
+.time-cell .event-chip:not(.m):not(.g) {
+  background:#EEE9FA; color:#65538F; border-left-color:#A58DD4;
+}
+.legend .dot.c1 { background:#E5A0A2; }
+.legend .dot.c3 { background:#A58DD4; }
+/* Invitation feedback: lower height and matching warm peach-pink hue. */
+#inv-msg:not(.is-error) {
+  margin:8px 0 0; padding:7px 12px; min-height:0;
+  border-radius:12px; background:#FBE8E5; color:#8A4C52; border:1px solid #F2CBC7;
+  font-size:.83rem; line-height:1.35; font-weight:700;
+}
+#inv-msg.is-error { margin:8px 0 0; padding:7px 12px; border-radius:12px; font-size:.83rem; line-height:1.35; }
+/* Keep the cream meeting rows, but make them shorter. */
+.tbl tbody tr.meeting-row td { padding-top:8px; padding-bottom:8px; }
+.tbl tbody tr.meeting-row .meeting-date-pill {
+  padding:5px 11px; font-size:.79rem; line-height:1.3;
+}
+/* Upcoming meetings: clearer buttery-yellow, without mustard. */
+.tbl tbody tr.meeting-row.urg-soon {
+  --ub:#FFDC7A; --pb:#FFF1C8; --pt:#765A20;
+}
+/* Preserve urgency meaning on task cards, just soften the yellow edge. */
+.board .tcard.urg-soon { --ub:#FFDC7A; }
+/* The same semantic colors are readable in dark mode. */
+html[data-theme="dark"] .cal-date .event-chip.m,
+html[data-theme="dark"] .time-cell .event-chip.m,
+html[data-theme="dark"] .time-grid > .time-event.m {
+  background:#563D44; color:#FFD8D7; border-left-color:#E5A0A2;
+}
+html[data-theme="dark"] .cal-date .event-chip:not(.m):not(.g),
+html[data-theme="dark"] .time-cell .event-chip:not(.m):not(.g),
+html[data-theme="dark"] .time-grid > .time-event.t {
+  background:#3F3857; color:#E9DEFF; border-left-color:#A58DD4;
+}
+html[data-theme="dark"] #inv-msg:not(.is-error) {
+  background:#563D44; color:#FFD8D7; border-color:#79515A;
+}

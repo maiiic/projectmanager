@@ -932,3 +932,106 @@ html[data-theme="dark"] .time-cell .event-chip.m {
 /* Informational invite progress/success is blue; errors stay pink/red. */
 #inv-msg:not(.is-error) { background: #e4f0fc; color: #245f9a; border: 1px solid #c8e0f7; }
 html[data-theme="dark"] #inv-msg:not(.is-error) { background: #2d425b; color: #cee5ff; border-color: #486381; }
+
+
+/* === Calendar + task board visual polish (2026-11-16) === */
+/* Keep sticky day headings ABOVE events when scrolling vertically. */
+.time-grid > .time-day-heading,
+.time-grid > .time-corner { position:sticky; top:0; z-index:12; isolation:isolate; }
+.time-grid > .time-event { z-index:2; position:relative; align-self:stretch; align-content:start;
+  text-align:left; line-height:1.25; font-size:.72rem; font-weight:800;
+  padding:8px 10px; border-radius:9px; border-left-width:4px;
+  white-space:normal; overflow:hidden; overflow-wrap:anywhere;
+  box-shadow:none; }
+.time-grid > .time-event.m,
+.cal-date .event-chip.m,
+.time-cell .event-chip.m { background:#fcecf2; color:#8a4862; border-left-color:#d98aa8; }
+.cal-date.today .event-chip.m { background:#f9e5ed; }
+/* Avoid overlapping labels while preserving accurate 30-minute positioning. */
+.time-grid > .time-label { position:relative; z-index:3; background:var(--card); }
+.time-grid > .time-label.all-day-label { background:var(--fill); }
+.time-grid > .time-cell { z-index:0; }
+/* Scrollable time axis: titles remain readable. */
+.time-grid-wrap { overscroll-behavior:contain; scroll-padding-top:55px; }
+/* Invites: soft blush rows, not the same color as badges or buttons. */
+.tbl tbody td { background:#fcf6f8; }
+.tbl tbody tr:hover td { background:#f9edf2; }
+html[data-theme="dark"] .tbl tbody td { background:#382f39; }
+html[data-theme="dark"] .tbl tbody tr:hover td { background:#473541; }
+/* Task cards: cream body with color only on left BORDER, no inset line. */
+.board .col { background:var(--column-bg,var(--sky)); transition:background .16s ease, outline-color .16s ease; }
+.board .col:nth-child(n) { background:var(--column-bg,var(--sky)); }
+.board .col h2::before { background:var(--column-edge,var(--sky-d)); }
+.board .col:nth-child(n) h2::before { background:var(--column-edge,var(--sky-d)); }
+.board .col.over { outline:3px dashed var(--column-edge,var(--sky-d)); outline-offset:-7px; }
+.board .tcard { background:#fffcf5; border:1px solid #eee8dd;
+  border-left:5px solid var(--column-edge,var(--sky-d)); padding-left:11px; }
+.board .tcard::before { content:none !important; }
+html[data-theme="dark"] .board .tcard { background:#36342f; border-color:#554f48;
+  border-left-color:var(--column-edge,var(--sky-d)); }
+html[data-theme="dark"] .board .col:nth-child(n) { background:color-mix(in srgb,var(--column-bg) 22%,#252930); }
+/* Limited accessible pastel palette for each shared column. */
+.column-palette { display:flex; gap:5px; flex-wrap:wrap; margin:-2px 0 12px 7px; }
+.column-color-swatch { width:21px; height:21px; flex:0 0 21px; padding:0;
+  border:1px solid var(--swatch-edge); border-radius:50%; background:var(--swatch);
+  cursor:pointer; transition:transform .13s ease,box-shadow .13s ease; }
+.column-color-swatch:hover { transform:scale(1.13); }
+.column-color-swatch.selected { box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--swatch-edge); }
+.column-color-swatch:focus-visible { outline:2px solid var(--ink); outline-offset:3px; }
+
+/* Home: Most pressing task rows use a flush left accent, not an inset stripe. */
+.panel .row[class*="urg-"],
+html[data-theme="dark"] .panel .row[class*="urg-"] {
+  background:#fffcf5; border:1px solid #eee8dd;
+  border-left:5px solid var(--ub,var(--sky-d));
+  padding-left:14px;
+}
+.panel .row[class*="urg-"] .urg-bar { display:none; }
+html[data-theme="dark"] .panel .row[class*="urg-"] { background:#36342f; border-color:#554f48; border-left-color:var(--ub,var(--sky-d)); }
+
+
+/* === Refined Kanban and Invites cards === */
+/* The header dot is the only palette trigger. Hidden means truly hidden. */
+.board .col h2::before { display:none !important; }
+.board .col h2 { position:relative; }
+.column-color-trigger {
+  display:inline-block; flex:0 0 13px; width:13px; height:13px;
+  padding:0; margin:0 3px 0 6px; border:0; border-radius:50%;
+  background:var(--column-edge,var(--sky-d)); cursor:pointer;
+  box-shadow:0 0 0 3px transparent; transition:box-shadow .15s,transform .15s;
+}
+.column-color-trigger:hover, .column-color-trigger[aria-expanded="true"] {
+  transform:scale(1.08); box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--column-edge,var(--sky-d));
+}
+.column-color-trigger:focus-visible { outline:2px solid var(--ink); outline-offset:4px; }
+.column-palette[hidden] { display:none !important; }
+.column-palette:not([hidden]) {
+  display:flex; position:relative; padding:10px 12px; margin:0 0 12px;
+  border-radius:14px; border:1px solid var(--line); background:var(--card);
+  box-shadow:var(--sh); gap:9px; align-items:center;
+}
+/* All task cards retain the cream body; urgency controls just the outside edge. */
+.board .tcard { background:#fffcf5 !important; border:1px solid #eee8dd;
+  border-left:5px solid var(--ub,var(--sky-d)) !important;
+  padding:14px 15px; border-radius:16px; }
+.board .tcard.urg-late { --ub:var(--red-d); }
+.board .tcard.urg-today { --ub:var(--orange-d); }
+.board .tcard.urg-soon { --ub:var(--butter-d); }
+.board .tcard.urg-week { --ub:var(--teal-d); }
+.board .tcard.urg-later { --ub:var(--sky-d); }
+html[data-theme="dark"] .board .tcard { background:#36342f !important; border-color:#554f48; border-left-color:var(--ub,var(--sky-d)) !important; }
+/* Invites rows are cream too, with urgency indicated at their left edge and on a date pill. */
+.tbl tbody tr.meeting-row { --ub:var(--sky-d); --pb:var(--sky); --pt:var(--sky-t); }
+.tbl tbody tr.meeting-row.urg-late { --ub:var(--red-d); --pb:var(--blush); --pt:var(--blush-t); }
+.tbl tbody tr.meeting-row.urg-today { --ub:var(--orange-d); --pb:var(--orange); --pt:var(--orange-t); }
+.tbl tbody tr.meeting-row.urg-soon { --ub:var(--butter-d); --pb:var(--butter); --pt:var(--butter-t); }
+.tbl tbody tr.meeting-row.urg-week { --ub:var(--teal-d); --pb:var(--teal); --pt:var(--teal-t); }
+.tbl tbody tr.meeting-row.urg-later { --ub:var(--sky-d); --pb:var(--sky); --pt:var(--sky-t); }
+.tbl tbody tr.meeting-row td { background:#fffcf5; }
+.tbl tbody tr.meeting-row:hover td { background:#fff9ed; }
+.tbl tbody tr.meeting-row td:first-child { border-left:5px solid var(--ub); padding-left:11px; }
+.tbl tbody tr.meeting-row .meeting-date-pill { display:inline-flex; align-items:center; max-width:100%;
+  padding:7px 13px; border-radius:999px; background:var(--pb); color:var(--pt);
+  font-size:.81rem; line-height:1.4; font-weight:800; white-space:nowrap; }
+html[data-theme="dark"] .tbl tbody tr.meeting-row td { background:#36342f; }
+html[data-theme="dark"] .tbl tbody tr.meeting-row:hover td { background:#424037; }

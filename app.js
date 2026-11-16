@@ -29,6 +29,23 @@ const COLORS = [
   { name: "Amber", hex: "#d99e2e" }, { name: "Yellow", hex: "#d4aa00" }, { name: "Green", hex: "#4aa75a" },
   { name: "Mint", hex: "#19a690" }, { name: "Teal", hex: "#1c9aa8" }, { name: "Slate", hex: "#7286a0" },
 ];
+// Shared pastel palette for group Kanban columns (stored in task_columns.color).
+const COLUMN_PASTELS = [
+  { name: "Sky", hex: "#e3effb", edge: "#4f94dc" },
+  { name: "Butter", hex: "#fdf1cf", edge: "#c89b2b" },
+  { name: "Mint", hex: "#e0f2ee", edge: "#248978" },
+  { name: "Blush", hex: "#fbeaf0", edge: "#c76c92" },
+  { name: "Lilac", hex: "#eeeafa", edge: "#8878c2" },
+  { name: "Peach", hex: "#fff0e3", edge: "#cb8950" },
+  { name: "Sage", hex: "#eaf0e0", edge: "#77925e" },
+  { name: "Slate", hex: "#e9eef3", edge: "#778da5" }
+];
+const columnPastel = (column, index = 0) =>
+  COLUMN_PASTELS.find(p => p.hex === String(column?.color || '').toLowerCase()) || COLUMN_PASTELS[index % COLUMN_PASTELS.length];
+const columnStyle = (column, index = 0) => {
+  const p = columnPastel(column, index);
+  return `--column-bg:${p.hex};--column-edge:${p.edge}`;
+};
 const safeColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase())?.hex || COLORS[0].hex;
 const applyTheme = (value) => { document.documentElement.dataset.theme = value === "dark" ? "dark" : "light"; };
 const meProfile = () => S.members.find((p) => p.id === S.user?.id);
@@ -393,7 +410,7 @@ function home() {
   </div></div>`;
 }
 
-const card = (t) => `<article class="tcard" draggable="true" data-id="${t.id}"><p>${esc(t.title)}</p>
+const card = (t) => `<article class="tcard urg-${urg(t)}" draggable="true" data-id="${t.id}"><p>${esc(t.title)}</p>
   <div class="meta"><span class="pill p${t.priority}">${PR[t.priority]}</span><span class="due ${left(t) < 0 && !isDone(t) ? "late" : ""}">${dueLabel(t)}</span></div>
   <div class="meta"><small>${esc(who(t))}</small>
   <select class="st${S.cols.findIndex((c) => c.id === (t.column_id || S.cols[0].id)) % 5}" data-move="${t.id}" aria-label="Status">${S.cols.map((c) => `<option value="${c.id}"${(t.column_id || S.cols[0].id) === c.id ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
@@ -408,7 +425,8 @@ function tasks() {
   <select name="assignee" aria-label="Assignee"><option value="">Unassigned</option>${opts}</select><button class="btn">Add task</button></form>
   <div class="board">` + S.cols.map((c, i) => {
     const list = S.tasks.filter((t) => t.column_id === c.id || (!t.column_id && i === 0)).sort(urgent);
-    return `<section class="col" data-cid="${c.id}"><h2><input class="colname" data-rename="${c.id}" value="${esc(c.name)}" aria-label="Column name"><small>${list.length}</small>${list.length ? "" : `<button type="button" class="icon" data-delcol="${c.id}" aria-label="Delete empty column">✕</button>`}</h2>${list.map(card).join("") || '<p class="empty">Drop tasks here</p>'}</section>`;
+    const palette = COLUMN_PASTELS.map(p => `<button type="button" class="column-color-swatch ${columnPastel(c,i).hex===p.hex?'selected':''}" data-column-color="${c.id}" data-pastel="${p.hex}" title="${p.name}" aria-label="Set ${esc(c.name)} to ${p.name}" aria-pressed="${columnPastel(c,i).hex===p.hex}" style="--swatch:${p.hex};--swatch-edge:${p.edge}"></button>`).join('');
+    return `<section class="col" data-cid="${c.id}" style="${columnStyle(c,i)}"><h2><button type="button" class="column-color-trigger" data-toggle-palette="${c.id}" aria-expanded="false" aria-label="Choose ${esc(c.name)} column color" title="Change column color"></button><input class="colname" data-rename="${c.id}" value="${esc(c.name)}" aria-label="Column name"><small>${list.length}</small>${list.length ? "" : `<button type="button" class="icon" data-delcol="${c.id}" aria-label="Delete empty column">✕</button>`}</h2><div class="column-palette" hidden aria-label="${esc(c.name)} column color">${palette}</div>${list.map(card).join("") || '<p class="empty">Drop tasks here</p>'}</section>`;
   }).join("") + "</div>";
 }
 
@@ -595,6 +613,12 @@ function invites() {
   const rows = [...S.meetings].sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
   const cal = S.gcals.find((c) => c.id === S.group.gcal_id)?.summary || "your primary calendar";
   const when = (x) => { const a = new Date(x.starts_at), b = new Date(x.ends_at); return `${a.toLocaleString("en", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} – ${b.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" })}`; };
+  const meetingUrgency = (x) => {
+    const starts = new Date(x.starts_at);
+    if (Number.isNaN(starts.getTime())) return 'later';
+    const days = Math.round((new Date(starts.getFullYear(), starts.getMonth(), starts.getDate()) - today()) / 864e5);
+    return days < 0 ? 'late' : days === 0 ? 'today' : days <= 2 ? 'soon' : days <= 7 ? 'week' : 'later';
+  };
   return `<div class="bar"><div><h1>Invites</h1><p class="hint">${S.gtoken ? `Invites are added to ${esc(cal)} and emailed to everyone below.` : "Connect Google Calendar on the Home page to send invites."}</p></div></div>
   <form class="panel inv" data-form="invite" novalidate>
     <div class="inv-grid">
@@ -608,7 +632,7 @@ function invites() {
     <p id="inv-msg" class="message" role="status" hidden></p>
     <div class="actions"><button class="btn">Send invites</button></div>
   </form>
-  <section class="panel"><h2>Scheduled meetings <small>${rows.length}</small></h2>${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Status</th><th>Meeting</th><th>Date &amp; time</th><th>People emailed</th><th class="invite-actions-heading">Actions</th></tr></thead><tbody>${rows.map((x) => `<tr><td><span class="pill p1">Sent</span></td><td><span class="mt"><i class="dot c1"></i>${esc(x.title)}</span></td><td>${esc(when(x))}</td><td title="${esc((x.emails || []).join(", "))}">${(x.emails || []).length} ${(x.emails || []).length === 1 ? "person" : "people"}</td><td class="invite-actions-cell"><button type="button" class="invite-delete-btn" data-open-meeting="${esc(x.id)}" aria-label="Manage or delete ${esc(x.title)}" title="Manage or delete meeting"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7m4-7v7"/></svg><span>Delete</span></button></td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">No meetings scheduled yet.</p>'}</section>`;
+  <section class="panel"><h2>Scheduled meetings <small>${rows.length}</small></h2>${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Status</th><th>Meeting</th><th>Date &amp; time</th><th>People emailed</th><th class="invite-actions-heading">Actions</th></tr></thead><tbody>${rows.map((x) => `<tr class="meeting-row urg-${meetingUrgency(x)}"><td><span class="pill p1">Sent</span></td><td><span class="mt">${esc(x.title)}</span></td><td><span class="meeting-date-pill">${esc(when(x))}</span></td><td title="${esc((x.emails || []).join(", "))}">${(x.emails || []).length} ${(x.emails || []).length === 1 ? "person" : "people"}</td><td class="invite-actions-cell"><button type="button" class="invite-delete-btn" data-open-meeting="${esc(x.id)}" aria-label="Manage or delete ${esc(x.title)}" title="Manage or delete meeting"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7m4-7v7"/></svg><span>Delete</span></button></td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">No meetings scheduled yet.</p>'}</section>`;
 }
 
 async function sendInvite(f, v) {
@@ -719,9 +743,36 @@ async function moveTask(id, cid) {
 }
 
 $("content").onclick = async (e) => {
-  const t = e.target.closest("[data-open-meeting],[data-event],[data-cal-step],[data-cal-mode],[data-cal-today],[data-cal-day],[data-goto],[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
+  const t = e.target.closest("[data-open-meeting],[data-event],[data-cal-step],[data-cal-mode],[data-cal-today],[data-cal-day],[data-goto],[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol],[data-column-color],[data-toggle-palette]");
   if (!t) return;
   const ds = t.dataset;
+  if (ds.togglePalette) {
+    const col = t.closest('.col');
+    const palette = col?.querySelector('.column-palette');
+    if (!palette) return;
+    const wasHidden = palette.hidden;
+    document.querySelectorAll('.column-palette').forEach(el => { el.hidden = true; });
+    document.querySelectorAll('.column-color-trigger').forEach(el => el.setAttribute('aria-expanded', 'false'));
+    palette.hidden = !wasHidden;
+    t.setAttribute('aria-expanded', String(wasHidden));
+    return;
+  }
+  if (ds.columnColor) {
+    const chosen = COLUMN_PASTELS.find(p => p.hex === ds.pastel);
+    const col = S.cols.find(c => c.id === ds.columnColor);
+    if (!chosen || !col) return;
+    const previous = col.color;
+    col.color = chosen.hex;
+    draw();
+    const response = await db.from('task_columns').update({ color: chosen.hex })
+      .eq('id', col.id).eq('group_id', S.group.id);
+    if (response.error) {
+      col.color = previous;
+      draw();
+      alert('Could not save column color: ' + response.error.message + '\nRun column_color_migration.sql in Supabase first.');
+    }
+    return;
+  }
   if (ds.openMeeting !== undefined) return showMeetingFromInvites(ds.openMeeting);
   if (ds.event !== undefined) return showEventDetails(ds.event);
   if (ds.calMode) { S.calendarMode=ds.calMode; if(S.calendarMode==='month') S.month=new Date(S.calendarDate.getFullYear(),S.calendarDate.getMonth(),1); draw(); if(S.gtoken){await gload();draw();} return; }
@@ -753,6 +804,12 @@ $("content").onclick = async (e) => {
     if (b) b.textContent = "Saved!";
   }
 };
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest?.('.column-palette, .column-color-trigger')) return;
+  document.querySelectorAll('.column-palette').forEach(el => { el.hidden = true; });
+  document.querySelectorAll('.column-color-trigger').forEach(el => el.setAttribute('aria-expanded', 'false'));
+});
 
 $("content").onchange = async (e) => {
   const d = e.target.dataset;

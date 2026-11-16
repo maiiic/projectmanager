@@ -737,3 +737,15 @@ html[data-theme="dark"] .mrow { background: var(--butter); }
 .color-options { display: flex; flex-wrap: wrap; gap: 8px; max-width: none; }
 .color-option { padding: 7px 14px 7px 8px; }
 .color-swatch { width: 22px; height: 22px; background: color-mix(in srgb, var(--u) 32%, var(--card)); border: 2px solid var(--u); }
+
+.topbar { position: fixed; top: 14px; left: 14px; z-index: 45; display: flex; align-items: center; gap: 2px; }
+.tb-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); cursor: pointer; }
+.tb-btn:hover { background: var(--fill); color: var(--ink); }
+.tb-btn .ic { width: 20px; height: 20px; }
+.side { padding-top: 64px; }
+.mini .topbar { left: 21px; }
+.mini .side { padding-top: 72px; }
+@media (max-width: 860px) {
+  .topbar { display: none; }
+  .side, .mini .side { padding-top: 14px; }
+}

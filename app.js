@@ -23,26 +23,30 @@ const FIELDS = [
   ["birthday", "Birthday", "date", ""]
 ];
 const COLORS = [
-  { name: "Sky", hex: "#a9cdeb", dark: "#354f70", legacy: "#4f94dc" },
-  { name: "Baby Blue", hex: "#bfdef2", dark: "#36566b", legacy: "#84bde5" },
-  { name: "Indigo", hex: "#c7cdf4", dark: "#444b7a", legacy: "#8d9de9" },
-  { name: "Violet", hex: "#d8c8f1", dark: "#5b477b", legacy: "#a691e2" },
-  { name: "Lilac", hex: "#ddd3f5", dark: "#574981", legacy: "#8878e4" },
-  { name: "Pink", hex: "#f6cfe3", dark: "#7d4b66", legacy: "#efa1c3" },
-  { name: "Rose", hex: "#f1c0d0", dark: "#854b62", legacy: "#e6708f" },
-  { name: "Red", hex: "#f2c5c4", dark: "#854e52", legacy: "#e88d88" },
-  { name: "Coral", hex: "#f5d3c8", dark: "#855747", legacy: "#eda38c" },
-  { name: "Peach", hex: "#f8ddc9", dark: "#815b45", legacy: "#eab58d" },
-  { name: "Yellow", hex: "#f7edb9", dark: "#73632c", legacy: "#e4bd5a" },
-  { name: "Amber", hex: "#f5dfb5", dark: "#775d33", legacy: "#d99e2e" },
-  { name: "Sage", hex: "#d5e7d4", dark: "#476750", legacy: "#98bea0" },
-  { name: "Green", hex: "#cbe9d3", dark: "#426b50", legacy: "#66b996" },
-  { name: "Mint", hex: "#c2ebe2", dark: "#386c61", legacy: "#19a690" },
-  { name: "Teal", hex: "#c9e8e9", dark: "#416a70", legacy: "#79bec2" },
-  { name: "Slate", hex: "#d5dfeb", dark: "#4b6075", legacy: "#7286a0" }
+  { name: "Sky", hex: "#9cc8e9", dark: "#315974" },
+  { name: "Baby Blue", hex: "#b5daf0", dark: "#345c76" },
+  { name: "Indigo", hex: "#c2c9ef", dark: "#49537c" },
+  { name: "Violet", hex: "#d1c0ef", dark: "#64527d" },
+  { name: "Lilac", hex: "#cbbfee", dark: "#5d5180" },
+  { name: "Pink", hex: "#f2c5df", dark: "#86546d" },
+  { name: "Rose", hex: "#f0bad0", dark: "#885167" },
+  { name: "Red", hex: "#f0c0bf", dark: "#875459" },
+  { name: "Coral", hex: "#f3c9bd", dark: "#815745" },
+  { name: "Peach", hex: "#f5d5c0", dark: "#85634c" },
+  { name: "Yellow", hex: "#ffeda8", dark: "#766228" },
+  { name: "Soft Honey", hex: "#f7e4b9", dark: "#7b652e" },
+  { name: "Sage", hex: "#c9dfc8", dark: "#486b4d" },
+  { name: "Green", hex: "#b6dfc7", dark: "#356a51" },
+  { name: "Mint", hex: "#afe3d7", dark: "#316c60" },
+  { name: "Teal", hex: "#b8e2e3", dark: "#386c6e" },
+  { name: "Slate", hex: "#becddd", dark: "#4d6074" }
 ];
-const darkColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase() || c.legacy === String(v || "").toLowerCase())?.dark || COLORS[0].dark;
-const safeColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase() || c.legacy === String(v || "").toLowerCase())?.hex || COLORS[0].hex;
+const LEGACY_COLORS = { "#4f94dc": "#9cc8e9", "#84bde5": "#b5daf0", "#8d9de9": "#c2c9ef", "#a691e2": "#d1c0ef", "#8878e4": "#cbbfee", "#efa1c3": "#f2c5df", "#e6708f": "#f0bad0", "#e88d88": "#f0c0bf", "#eda38c": "#f3c9bd", "#eab58d": "#f5d5c0", "#f0d987": "#fff0b8", "#e9c681": "#f7e4b9", "#98bea0": "#c9dfc8", "#66b996": "#b6dfc7", "#19a690": "#afe3d7", "#79bec2": "#b8e2e3", "#7286a0": "#becddd", "#82b9e5": "#9cc8e9", "#a1d1ed": "#b5daf0", "#adb8ed": "#c2c9ef", "#c2ade8": "#d1c0ef", "#b9a9e8": "#cbbfee", "#efb4d1": "#f2c5df", "#eda4bd": "#f0bad0", "#efadab": "#f0c0bf", "#efb6a5": "#f3c9bd", "#f2c4a9": "#f5d5c0", "#f4e5a5": "#fff0b8", "#efd7a4": "#f7e4b9", "#b5d7b7": "#c9dfc8", "#9dd6b7": "#b6dfc7", "#95d9cb": "#afe3d7", "#9fd7d8": "#b8e2e3", "#aabbd0": "#becddd" };
+const safeColor = (v) => {
+  const hex = String(v || "").toLowerCase();
+  return COLORS.find((c) => c.hex === hex)?.hex || LEGACY_COLORS[hex] || COLORS[0].hex;
+};
+const darkColor = (v) => COLORS.find((c) => c.hex === safeColor(v))?.dark || COLORS[0].dark;
 const applyTheme = (value) => { document.documentElement.dataset.theme = value === "dark" ? "dark" : "light"; };
 const meProfile = () => S.members.find((p) => p.id === S.user?.id);
 const myTheme = () => meProfile()?.theme || "light";

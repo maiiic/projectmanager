@@ -1,695 +1,754 @@
-// Paste your Supabase project URL and anon (public) key. Never use the service_role key here.
-const SUPABASE_URL = "https://yginexyfrteirmwdegnx.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_SnDADsUXfW1THjWNQstWGQ_8iseB7bW";
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// Google Calendar: paste your OAuth "Web application" client ID (see setup steps).
-const GOOGLE_CLIENT_ID = "521306182221-jgur5pekktg4vi3mf2o3e7u49uur6vic.apps.googleusercontent.com";
-const GSCOPES = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events";
-
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const pad = (n) => String(n).padStart(2, "0");
-const now = new Date();
-const S = { user: null, groups: [], choosingGroup: false, group: null, members: [], tasks: [], busy: [], meetings: [], mine: new Set(), dirty: false, view: "home", month: new Date(now.getFullYear(), now.getMonth(), 1), sub: false, cols: [], doneIds: new Set(), dragging: false, gtoken: null, gcals: [], gevents: [], gerr: "" };
-const DAYS = ["M", "T", "W", "Th", "F", "S"], SLOTS = 32, PR = ["", "Low", "Medium", "High"];
-const FIELDS = [
-  ["role", "Role", "text", "e.g. Designer, Developer"],
-  ["full_name", "Display name", "text", "How teammates should call you"],
-  ["id_number", "ID number", "text", "e.g. Student ID"],
-  ["address", "Address", "text", "City or address (optional)"],
-  ["contact", "Contact number", "tel", "e.g. 0912 345 6789"],
-  ["discord", "Discord handle", "text", "e.g. username"],
-  ["birthday", "Birthday", "date", ""]
-];
-const COLORS = [
-  { name: "Sky", hex: "#4f94dc" }, { name: "Blue", hex: "#3f78d8" }, { name: "Indigo", hex: "#5b5bd6" },
-  { name: "Violet", hex: "#9a5bd0" }, { name: "Lilac", hex: "#8878e4" }, { name: "Pink", hex: "#d9609f" },
-  { name: "Rose", hex: "#e6708f" }, { name: "Red", hex: "#d6494f" }, { name: "Orange", hex: "#e07f3a" },
-  { name: "Amber", hex: "#d99e2e" }, { name: "Yellow", hex: "#ffe58f" }, { name: "Green", hex: "#4aa75a" },
-  { name: "Mint", hex: "#19a690" }, { name: "Teal", hex: "#1c9aa8" }, { name: "Slate", hex: "#7286a0" },
-];
-const safeColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase())?.hex || COLORS[0].hex;
-const applyTheme = (value) => { document.documentElement.dataset.theme = value === "dark" ? "dark" : "light"; };
-const meProfile = () => S.members.find((p) => p.id === S.user?.id);
-const myTheme = () => meProfile()?.theme || "light";
-
-const nm = (p) => (p ? p.full_name || (p.email || "Member").split("@")[0] : "Unassigned");
-const today = () => new Date(new Date().setHours(0, 0, 0, 0));
-const left = (t) => (t.due ? Math.round((new Date(t.due + "T00:00") - today()) / 864e5) : 9999);
-const urgent = (a, b) => left(a) - left(b) || b.priority - a.priority;
-const dueLabel = (t) => { const d = left(t); return !t.due ? "No date" : d < 0 ? `${-d}d overdue` : d === 0 ? "Due today" : d === 1 ? "Due tomorrow" : `In ${d} days`; };
-const who = (t) => nm(S.members.find((p) => p.id === t.assignee));
-const isDone = (t) => S.doneIds.has(t.column_id);
-const FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const tl = (i) => { const m = 480 + 30 * i, h = Math.floor(m / 60) % 24; return `${((h + 11) % 12) + 1}:${m % 60 ? "30" : "00"} ${h < 12 ? "AM" : "PM"}`; };
-const th = (i) => tl(i).replace(":00", "");
-
-/* ---------- sign in ---------- */
-let mode = "signin";
-function setMode(next) {
-  mode = next;
-  const si = mode === "signin";
-  $("tab-signin").classList.toggle("is-active", si);
-  $("tab-signup").classList.toggle("is-active", !si);
-  $("tab-signin").setAttribute("aria-selected", String(si));
-  $("tab-signup").setAttribute("aria-selected", String(!si));
-  $("submit-btn").textContent = si ? "Sign in" : "Create account";
-  $("password").autocomplete = si ? "current-password" : "new-password";
-  showMessage("");
+:root {
+  --bg: #ffffff; --card: #ffffff; --fill: #fafbfc; --ink: #243039; --ink-soft: #697880; --line: #e9edf0;
+  --sand: #f9f8f5; --sand-t: #756b59;
+  --teal: #e0f2ee; --teal-b: #c4e6df; --teal-d: #19a690; --teal-t: #0b7467;
+  --sky: #e3effb; --sky-d: #4f94dc; --sky-t: #1f63a8;
+  --blush: #fde8ee; --blush-d: #e6708f; --blush-t: #a8365a;
+  --butter: #fdf1cf; --butter-d: #e5b02f; --butter-t: #7d5a07;
+  --lilac: #ece8fb; --lilac-d: #8878e4; --lilac-t: #5242ad;
+  --danger: #b83555; --r: 18px; --gap: 16px;
+  --sh: 0 1px 3px rgba(23, 38, 54, 0.035);
 }
-function showMessage(text, isError = false) {
-  $("message").textContent = text;
-  $("message").hidden = !text;
-  $("message").classList.toggle("is-error", isError);
-}
-$("tab-signin").onclick = () => setMode("signin");
-$("tab-signup").onclick = () => setMode("signup");
-$("auth-form").onsubmit = async (e) => {
-  e.preventDefault();
-  showMessage("");
-  $("submit-btn").disabled = true;
-  const email = $("email").value.trim(), password = $("password").value;
-  try {
-    if (mode === "signup") {
-      const { data, error } = await db.auth.signUp({ email, password, options: { emailRedirectTo: location.href } });
-      if (error) throw error;
-      if (!data.session) showMessage("Almost there! Check your email and click the link to confirm your account.");
-    } else {
-      const { error } = await db.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-    }
-  } catch (err) {
-    showMessage(err.message, true);
-  } finally {
-    $("submit-btn").disabled = false;
-  }
-};
-$("signout-btn").onclick = () => db.auth.signOut();
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; font-family: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); line-height: 1.5; }
+h1 { margin: 0; font-size: 1.8rem; font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; }
+h2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 14px; font-size: 1.05rem; font-weight: 800; line-height: 1.3; }
+small { color: var(--ink-soft); font-weight: 600; }
+:focus-visible { outline: 2px solid var(--teal-d); outline-offset: 2px; }
+.ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
-// Supabase Google Sign-In (separate from Google Calendar permissions).
-// Obtain the provider URL, then navigate explicitly so failures are visible.
-const googleLoginButton = $("google-login-btn");
-if (googleLoginButton) {
-  googleLoginButton.addEventListener("click", async () => {
-    if (googleLoginButton.disabled) return;
-    googleLoginButton.disabled = true;
-    googleLoginButton.dataset.originalLabel ||= googleLoginButton.innerHTML;
-    googleLoginButton.textContent = "Connecting to Google…";
-    showMessage("");
-    try {
-      const { data, error } = await db.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: "https://maiiic.github.io/projectmanager/",
-          skipBrowserRedirect: true
-        }
-      });
-      if (error) throw error;
-      if (!data?.url) throw new Error("Supabase did not return a Google sign-in URL. Check the Google provider settings in Supabase.");
-      window.location.assign(data.url);
-    } catch (err) {
-      console.error("Google login failed:", err);
-      showMessage("Google sign-in failed: " + (err?.message || String(err)), true);
-      googleLoginButton.disabled = false;
-      googleLoginButton.innerHTML = googleLoginButton.dataset.originalLabel;
-    }
-  });
-}
+/* sign in */
+.page { min-height: 100%; display: grid; place-items: center; padding: 24px 16px; }
+.card { width: 100%; max-width: 400px; background: var(--card); border-radius: 24px; padding: 32px 28px; box-shadow: var(--sh); }
+.title { margin: 0; font-size: 1.8rem; font-weight: 800; }
+.subtitle { margin: 4px 0 24px; color: var(--ink-soft); }
+.tabs { display: flex; gap: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
+.tab { padding: 8px 2px; margin-bottom: -1px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--ink-soft); font: inherit; font-weight: 700; line-height: 1.4; cursor: pointer; }
+.tab.is-active { color: var(--ink); }
+#tab-signin.is-active { border-bottom-color: var(--sky-d); }
+#tab-signup.is-active { border-bottom-color: var(--blush-d); }
+.message { margin: 16px 0 0; padding: 12px 16px; border-radius: 16px; background: var(--teal); color: var(--teal-t); font-weight: 700; }
+.message.is-error { background: var(--blush); color: var(--danger); }
 
-/* ---------- data ---------- */
-async function boot(session) {
-  const previousUser = S.user?.id;
-  S.user = session?.user || null;
-  $("auth-page").hidden = !!S.user;
-  $("app-view").hidden = !S.user;
-  if (!S.user) {
-    applyTheme("light");
-    S.group = null; S.groups = []; S.choosingGroup = false;
-    S.gtoken = null; S.gcals = []; S.gevents = [];
-    if (S.channel) { await db.removeChannel(S.channel); S.channel = null; }
-    return;
-  }
-  if (previousUser && previousUser !== S.user.id) {
-    S.group = null; S.gtoken = null; S.gcals = []; S.gevents = [];
-  }
-  $("who").textContent = S.user.email || "Signed in";
-  $("who-badge").textContent = (S.user.email || "?").charAt(0).toUpperCase();
-  await refreshGroups();
-  if (!S.groups.length) return showGroupPicker();
-  let preferred;
-  try { preferred = localStorage.getItem(`pm-group-${S.user.id}`); } catch {}
-  const selected = S.groups.find((g) => g.id === preferred) || S.groups[0];
-  await selectGroup(selected);
-}
+/* fields and buttons */
+.form { display: grid; gap: 16px; }
+.field { display: grid; gap: 6px; font-weight: 700; font-size: .875rem; }
+input, select { height: 42px; padding: 0 18px; border: 1px solid transparent; border-radius: 999px; background-color: var(--fill); color: var(--ink); font: inherit; font-size: .92rem; font-weight: 600; min-width: 0; }
+input::placeholder { color: #9a9a90; font-weight: 500; }
+input:focus, select:focus { outline: none; border-color: var(--teal-d); background-color: #fff; box-shadow: 0 0 0 3px var(--teal); }
+select { appearance: none; -webkit-appearance: none; padding-right: 38px; cursor: pointer; background-repeat: no-repeat; background-position: right 15px center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%2366767c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 42px; padding: 0 24px; border: 0; border-radius: 999px; background: var(--teal); color: var(--teal-t); font: inherit; font-size: .92rem; font-weight: 800; letter-spacing: .01em; line-height: 1; white-space: nowrap; cursor: pointer; }
+.btn:hover { background: #cfebe5; }
+.btn:disabled { opacity: .6; cursor: wait; }
+.btn-quiet { background: var(--sand); color: var(--sand-t); }
+.btn-quiet:hover { background: #efe5cf; }
+.icon { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: var(--fill); color: var(--ink-soft); font-size: .9rem; line-height: 1; cursor: pointer; }
+.icon:hover { background: var(--teal); color: var(--teal-t); }
 
-async function refreshGroups() {
-  const { data, error } = await db.from("group_members")
-    .select("groups(id,name,code,gcal_id)").eq("user_id", S.user.id);
-  if (error) { alert(error.message); return; }
-  S.groups = (data || []).map((x) => x.groups).filter(Boolean);
-}
+/* app shell */
+.shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100%; transition: grid-template-columns .2s ease; }
+.shell.mini { grid-template-columns: 78px minmax(0, 1fr); }
+.side { display: flex; flex-direction: column; gap: 20px; padding: 22px 16px; background: var(--card); border-right: 1px solid var(--line); }
+.top { display: flex; align-items: center; gap: 10px; }
+.logo { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 14px; background: var(--teal); color: var(--teal-t); }
+.brand { flex: 1; font-size: 1.05rem; font-weight: 800; line-height: 1.2; }
+.group { display: grid; margin: 0; padding: 12px 16px; border-radius: 18px; background: var(--fill); font-size: .85rem; line-height: 1.4; }
+.group span { color: var(--ink-soft); font-weight: 600; }
+#nav { display: grid; gap: 6px; }
+#nav button { display: flex; align-items: center; gap: 14px; height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--ink-soft); font: inherit; font-weight: 700; line-height: 1; text-align: left; cursor: pointer; }
+#nav [data-go="home"] .ic { color: var(--sky-d); } #nav [data-go="tasks"] .ic { color: var(--blush-d); }
+#nav [data-go="schedule"] .ic { color: var(--teal-d); } #nav [data-go="directory"] .ic { color: var(--butter-d); }
+#nav button:hover { background: var(--fill); color: var(--ink); }
+#nav [data-go="home"].is-active { background: var(--sky); color: var(--sky-t); }
+#nav [data-go="tasks"].is-active { background: var(--blush); color: var(--blush-t); }
+#nav [data-go="schedule"].is-active { background: var(--teal); color: var(--teal-t); }
+#nav [data-go="directory"].is-active { background: var(--butter); color: var(--butter-t); }
+.who { margin: auto 12px 0; font-size: .8rem; color: var(--ink-soft); overflow-wrap: anywhere; }
+.side > .btn { gap: 10px; }
+.mini .lbl { display: none; }
+.mini .side { align-items: center; padding: 22px 10px; }
+.mini .top { flex-direction: column; gap: 12px; }
+.mini #nav button, .mini .side > .btn { width: 46px; padding: 0; justify-content: center; }
+.content { padding: 32px; min-width: 0; }
+.hint { margin: 4px 0 20px; color: var(--ink-soft); font-weight: 600; }
+.bar { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--gap); }
+.actions { display: flex; gap: 10px; }
+.panel { background: var(--card); border-radius: var(--r); padding: 22px; box-shadow: var(--sh); }
+.empty { margin: 0; padding: 14px 16px; border: 1px dashed #e3dccb; border-radius: 16px; color: var(--ink-soft); font-weight: 600; }
+.pill, .tag { display: inline-flex; align-items: center; height: 24px; padding: 0 11px; border-radius: 999px; font-size: .75rem; font-weight: 800; line-height: 1; white-space: nowrap; }
+.p3 { background: var(--blush); color: var(--blush-t); } .p2 { background: var(--butter); color: var(--butter-t); } .p1 { background: var(--teal); color: var(--teal-t); }
 
-async function selectGroup(group) {
-  if (!group) return showGroupPicker();
-  if (S.channel) { await db.removeChannel(S.channel); S.channel = null; }
-  S.group = group;
-  S.choosingGroup = false;
-  S.members = []; S.tasks = []; S.busy = []; S.meetings = [];
-  S.cols = []; S.mine = new Set(); S.doneIds = new Set(); S.dirty = false;
-  S.gevents = []; S.gerr = "";
-  const r0 = routeOf();
-  S.view = VIEWS.includes(r0) ? r0 : "home";
-  setRoute(S.view, true);
-  try { localStorage.setItem(`pm-group-${S.user.id}`, group.id); } catch {}
-  showGroupChrome(group);
-  await load(true);
-  if (S.gtoken) { await gload(); draw(); }
-  S.channel = db.channel(`pm-${group.id}`)
-    .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `group_id=eq.${group.id}` }, () => load())
-    .on("postgres_changes", { event: "*", schema: "public", table: "availability", filter: `group_id=eq.${group.id}` }, () => load())
-    .on("postgres_changes", { event: "*", schema: "public", table: "meetings", filter: `group_id=eq.${group.id}` }, () => load())
-    .on("postgres_changes", { event: "*", schema: "public", table: "task_columns", filter: `group_id=eq.${group.id}` }, () => load())
-    .subscribe();
-}
+/* home */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+.stat { display: grid; padding: 16px 20px; border-radius: var(--r); }
+.stat b { font-size: 2rem; line-height: 1.2; font-weight: 800; }
+.stat span { font-size: .85rem; font-weight: 700; }
+.s1 { background: var(--sky); color: var(--sky-t); } .s2 { background: var(--butter); color: var(--butter-t); }
+.s3 { background: var(--blush); color: var(--blush-t); } .s4 { background: var(--teal); color: var(--teal-t); }
+.prog { margin-bottom: var(--gap); }
+progress { appearance: none; -webkit-appearance: none; display: block; width: 100%; height: 12px; border: 0; border-radius: 999px; background: var(--fill); overflow: hidden; }
+progress::-webkit-progress-bar { background: var(--fill); border-radius: 999px; }
+progress::-webkit-progress-value { background: var(--teal-d); border-radius: 999px; }
+progress::-moz-progress-bar { background: var(--teal-d); border-radius: 999px; }
+progress.work::-webkit-progress-value { background: var(--sky-d); }
+progress.work::-moz-progress-bar { background: var(--sky-d); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 0; font-size: .85rem; font-weight: 600; color: var(--ink-soft); }
+.dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; }
+.c0 { background: var(--sky-d); } .c1 { background: var(--butter-d); } .c2 { background: var(--teal-d); } .c3 { background: var(--blush-d); } .c4 { background: var(--lilac-d); }
+.home { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: var(--gap); align-items: start; }
+.stack { display: grid; gap: var(--gap); }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.cal-head h2 { margin: 0; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.cal b { padding-bottom: 4px; text-align: center; font-size: .75rem; font-weight: 700; color: var(--ink-soft); }
+.cal i { min-height: 84px; padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: #fff; font-style: normal; font-size: .8rem; font-weight: 600; overflow: hidden; }
+.cal i.today { background: var(--teal); border-color: var(--teal-d); font-weight: 800; }
+.chip { display: block; margin-top: 3px; padding: 1px 8px; border-radius: 999px; background: var(--blush); color: var(--blush-t); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip.m { background: var(--teal); color: var(--teal-t); }
+.today .chip.m { background: #fff; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 16px; margin-bottom: 8px; border-radius: 16px; background: var(--fill); }
+.row:last-child { margin-bottom: 0; }
+.row div { display: grid; min-width: 0; line-height: 1.35; }
+.due { font-size: .8rem; font-weight: 700; white-space: nowrap; color: var(--ink-soft); }
+.due.late { color: var(--danger); }
+.load { display: grid; grid-template-columns: 90px 1fr 24px; align-items: center; gap: 12px; margin-bottom: 12px; font-size: .875rem; font-weight: 700; }
+.load:last-child { margin-bottom: 0; }
+.load span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.load b { text-align: right; }
 
-function showGroupPicker(push) {
-  S.choosingGroup = true;
-  $("nav").hidden = true;
-  $("group-name").textContent = "Your groups";
-  $("group-badge").textContent = "G";
-  $("group-code").textContent = "Choose, create or join";
-  $("content").innerHTML = onboard();
-  setRoute("workspace", !push);
-}
+/* tasks */
+.addtask { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 var(--gap); padding: 16px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); box-shadow: none; }
+.addtask input[name="title"] { flex: 1; min-width: 200px; }
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(280px, 1fr); gap: var(--gap); align-items: start; overflow-x: auto; padding-bottom: 8px; }
+.col { min-height: 160px; padding: 14px; border-radius: 22px; background: var(--sky); transition: background .12s; }
+.col:nth-child(5n+2) { background: var(--butter); } .col:nth-child(5n+3) { background: var(--teal); }
+.col:nth-child(5n+4) { background: var(--blush); } .col:nth-child(5n+5) { background: var(--lilac); }
+.col.over { outline: 3px dashed var(--teal-d); outline-offset: -7px; }
+.col h2 { justify-content: flex-start; gap: 6px; margin-bottom: 12px; }
+.col h2::before { content: ""; flex: none; width: 10px; height: 10px; margin: 0 2px 0 6px; border-radius: 50%; background: var(--sky-d); }
+.col:nth-child(5n+2) h2::before { background: var(--butter-d); } .col:nth-child(5n+3) h2::before { background: var(--teal-d); }
+.col:nth-child(5n+4) h2::before { background: var(--blush-d); } .col:nth-child(5n+5) h2::before { background: var(--lilac-d); }
+.col h2 small { color: var(--ink); opacity: .6; }
+.col h2 .icon { width: 28px; height: 28px; background: transparent; }
+.colname { flex: 1; height: 36px; padding: 0 12px; background-color: transparent; font-size: 1.02rem; font-weight: 800; }
+.colname:hover { background-color: rgba(255, 255, 255, .6); }
+.colname:focus { background-color: #fff; }
+.col .empty { background: rgba(255, 255, 255, .55); border-color: rgba(0, 0, 0, .1); }
+.tcard { margin-bottom: 10px; padding: 14px 16px; border-radius: 18px; background: #fff; box-shadow: var(--sh); cursor: grab; }
+.tcard:active { cursor: grabbing; }
+.tcard.dragging { opacity: .4; }
+.tcard p { margin: 0 0 10px; font-weight: 700; line-height: 1.4; }
+.meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.meta select { height: 32px; padding: 0 30px 0 14px; font-size: .8rem; font-weight: 800; background-position: right 12px center; }
+.st0 { background-color: var(--sky); color: var(--sky-t); } .st1 { background-color: var(--butter); color: var(--butter-t); }
+.st2 { background-color: var(--teal); color: var(--teal-t); } .st3 { background-color: var(--blush); color: var(--blush-t); } .st4 { background-color: var(--lilac); color: var(--lilac-t); }
 
-const gmenu = $("group-menu"), gbtn = $("group-switch-btn");
-const closeGroupMenu = () => { gmenu.hidden = true; gbtn.setAttribute("aria-expanded", "false"); };
-function openGroupMenu() {
-  const check = '<svg class="ic gm-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
-  gmenu.innerHTML = `<p class="gm-title">Switch group</p>${S.groups.map((g, i) => `<button type="button" class="gm-item" role="menuitem" data-switch="${esc(g.id)}"><span class="gm-badge h${i % 5}">${esc(g.name.charAt(0).toUpperCase())}</span><span class="gm-name">${esc(g.name)}</span>${S.group?.id === g.id ? check : ""}</button>`).join("")}
-    <div class="gm-sep"></div><button type="button" class="gm-item" role="menuitem" data-manage><span class="gm-badge manage"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><path d="M16.7 13.5v6.5M13.5 16.7H20"/></svg></span><span class="gm-name">Manage workspace</span></button>`;
-  const r = gbtn.getBoundingClientRect();
-  gmenu.style.left = `${r.left}px`;
-  gmenu.style.top = `${r.bottom + 8}px`;
-  gmenu.style.minWidth = `${Math.max(r.width, 260)}px`;
-  gmenu.hidden = false;
-  gbtn.setAttribute("aria-expanded", "true");
-}
-gbtn.onclick = async () => {
-  if (!gmenu.hidden) return closeGroupMenu();
-  await refreshGroups();
-  openGroupMenu();
-};
-gmenu.onclick = async (e) => {
-  const t = e.target.closest("[data-switch],[data-manage]");
-  if (!t) return;
-  closeGroupMenu();
-  if (t.dataset.manage !== undefined) { await refreshGroups(); return showGroupPicker(true); }
-  const g = S.groups.find((x) => x.id === t.dataset.switch);
-  if (g && (g.id !== S.group?.id || S.choosingGroup)) await selectGroup(g);
-};
-document.addEventListener("click", (e) => { if (!gmenu.hidden && !e.target.closest("#group-menu, #group-switch-btn")) closeGroupMenu(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeGroupMenu(); });
+/* directory */
+.dir { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--gap); margin-top: var(--gap); }
+.person { display: grid; gap: 12px; align-content: start; padding: 20px; border-radius: var(--r); background: #fff; box-shadow: var(--sh); }
+.person header { display: grid; padding: 10px 16px; border-radius: 16px; background: var(--lilac); color: var(--lilac-t); font-weight: 800; line-height: 1.4; }
+.person:nth-child(5n+2) header { background: var(--sky); color: var(--sky-t); }
+.person:nth-child(5n+3) header { background: var(--teal); color: var(--teal-t); }
+.person:nth-child(5n+4) header { background: var(--butter); color: var(--butter-t); }
+.person:nth-child(5n+5) header { background: var(--blush); color: var(--blush-t); }
+.person header small { color: inherit; font-weight: 600; }
+.person .mail { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.person dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-weight: 600; }
+.person dt { color: var(--ink-soft); } .person dd { margin: 0; overflow-wrap: anywhere; }
+.person form { display: grid; gap: 12px; }
 
-async function load(force) {
-  if (!S.group || S.choosingGroup) return;
-  const g = S.group.id;
-  const r = await Promise.all([
-    db.from("group_members").select("profiles(*)").eq("group_id", g),
-    db.from("tasks").select("*").eq("group_id", g),
-    db.from("availability").select("user_id,day,slot").eq("group_id", g),
-    db.from("meetings").select("*").eq("group_id", g),
-    db.from("task_columns").select("*").eq("group_id", g).order("position"),
-  ]);
-  const bad = r.find((x) => x.error);
-  if (bad) return alert(bad.error.message);
-  S.members = r[0].data.map((x) => x.profiles).filter(Boolean);
-  applyTheme(myTheme());
-  [S.tasks, S.busy, S.meetings, S.cols] = [r[1].data, r[2].data, r[3].data, r[4].data];
-  S.doneIds = new Set(S.cols.filter((c) => c.is_done).map((c) => c.id));
-  if (!S.dirty) S.mine = new Set(S.busy.filter((x) => x.user_id === S.user.id).map((x) => `${x.day}-${x.slot}`));
-  if (force || !(S.dragging || document.activeElement?.matches("#content input, #content select, #content textarea"))) draw();
+/* google calendar and invites */
+.gbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+.gbar select { flex: 1; min-width: 200px; max-width: 320px; }
+.gbar .bad { color: var(--danger); font-weight: 700; }
+.chip.g { background: var(--sky); color: var(--sky-t); }
+textarea { padding: 12px 18px; border: 1px solid transparent; border-radius: 20px; background-color: var(--fill); color: var(--ink); font: inherit; font-size: .92rem; font-weight: 600; resize: vertical; }
+textarea:focus { outline: none; border-color: var(--teal-d); background-color: #fff; box-shadow: 0 0 0 3px var(--teal); }
+.inv { display: grid; gap: var(--gap); margin-bottom: var(--gap); }
+.inv-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: var(--gap); }
+.tbl { width: 100%; border-collapse: collapse; font-weight: 600; font-size: .9rem; }
+.tbl th { padding: 0 12px 10px; text-align: left; color: var(--ink-soft); font-size: .8rem; font-weight: 700; }
+.tbl td { padding: 12px; border-top: 1px solid var(--line); }
+#nav [data-go="invites"] .ic { color: var(--lilac-d); }
+#nav [data-go="invites"].is-active { background: var(--lilac); color: var(--lilac-t); }
+
+/* schedule */
+.best { margin-bottom: var(--gap); }
+.bests { display: flex; flex-wrap: wrap; gap: 8px; }
+.best .tag { height: 36px; gap: 6px; padding: 0 18px; background: var(--teal); color: var(--teal-t); font-size: .85rem; }
+.best .tag small { color: inherit; opacity: .75; }
+.sub { margin: 28px 0 14px; }
+.hscroll { overflow-x: auto; }
+.g { display: grid; font-size: .72rem; font-weight: 700; }
+.ov { grid-template-columns: 72px repeat(6, minmax(92px, 1fr)); }
+.mg { grid-template-columns: 38px repeat(6, minmax(0, 1fr)); gap: 3px; }
+.mg b, .mg em { height: 20px; line-height: 20px; }
+.mg .c { height: 20px; border: 0; border-radius: 7px; background: #f4f4f0; }
+.g h3 small { margin-left: auto; font-size: .7rem; }
+.pc { --u: var(--sky-d); } .pc.u1 { --u: var(--butter-d); } .pc.u2 { --u: var(--teal-d); } .pc.u3 { --u: var(--blush-d); } .pc.u4 { --u: var(--lilac-d); }
+.g h3 { display: flex; align-items: center; grid-column: 1 / -1; gap: 10px; height: 34px; margin: 0 0 4px; font-size: .95rem; font-weight: 800; white-space: nowrap; }
+.g b, .g em, .g .c { height: 24px; line-height: 24px; text-align: center; font-style: normal; }
+.g em { padding-right: 8px; text-align: right; color: var(--ink-soft); font-size: .68rem; white-space: nowrap; }
+.g .c { border: 1px solid var(--line); }
+.ov .c { height: 28px; line-height: 26px; padding: 0 5px; font-size: .7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov em { height: 28px; line-height: 28px; }
+.l0 { background: #fbe4e7; color: #a92f4d; } .l2 { background: #ffffff; color: #3d7d9d; } .l4 { background: #dff5e9; color: #19734d; }
+.dot.l2 { border: 1px solid var(--line); }
+.members { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: var(--gap); align-items: start; }
+.pc { padding: 18px; }
+.pc.me { box-shadow: 0 0 0 2px var(--u), var(--sh); }
+.av { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; font-size: .8rem; font-weight: 800; }
+.av.c0 { background: var(--sky); color: var(--sky-t); } .av.c1 { background: var(--butter); color: var(--butter-t); }
+.av.c2 { background: var(--teal); color: var(--teal-t); } .av.c3 { background: var(--blush); color: var(--blush-t); } .av.c4 { background: var(--lilac); color: var(--lilac-t); }
+.mg .c.x { background: var(--u); }
+.mg.me .c { cursor: pointer; touch-action: none; user-select: none; }
+.mg.me .c:hover { outline: 2px solid var(--u); outline-offset: -2px; }
+
+@media (max-width: 860px) {
+  .shell, .shell.mini, .home { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .side, .mini .side { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 14px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .mini .lbl { display: inline; }
+  .mini .group { display: grid; }
+  .mini .top { flex-direction: row; }
+  #side-toggle, .group, .who { display: none; }
+  #nav { grid-auto-flow: column; }
+  .mini #nav button, .mini .side > .btn { width: auto; padding: 0 16px; }
+  .inv-grid { grid-template-columns: 1fr 1fr; }
+  .content { padding: 20px 14px; }
 }
 
-/* ---------- views ---------- */
-/* ---------- routing: browser back/forward work ---------- */
-const VIEWS = ["home", "tasks", "schedule", "invites", "directory", "settings"];
-const routeOf = () => { const v = location.hash.replace(/^#\//, ""); return v === "workspace" || VIEWS.includes(v) ? v : null; };
-function setRoute(v, replace) {
-  const h = `#/${v}`;
-  if (location.hash === h) return;
-  if (replace) history.replaceState(null, "", h);
-  else location.hash = h; // adds a history entry and fires hashchange
-}
-function navigate(view) {
-  if (location.hash === `#/${view}`) { S.view = view; return draw(); }
-  setRoute(view);
-}
-function showGroupChrome(g) {
-  $("nav").hidden = false;
-  $("group-name").textContent = g.name;
-  $("group-badge").textContent = g.name.charAt(0).toUpperCase();
-  $("group-code").textContent = `Invite code: ${g.code}`;
-}
-async function route() {
-  if (!S.user || (!S.group && !S.choosingGroup)) return;
-  const r = routeOf();
-  if (r === "workspace") { if (!S.choosingGroup) { await refreshGroups(); showGroupPicker(); } return; }
-  if (S.choosingGroup) { if (!S.group) return; S.choosingGroup = false; showGroupChrome(S.group); }
-  if (r) S.view = r;
-  draw();
-}
+/* 2026 light refresh: quiet backgrounds, clear availability and compact rounded slots */
+html, body, .content { background-color: var(--bg); }
+.panel, .person, .pc, .hscroll { border: 1px solid var(--line); box-shadow: none; }
+.card, .tcard { box-shadow: 0 1px 3px rgba(23, 38, 54, .04); }
+.addtask { border-radius: 16px; }
+.addtask input, .addtask select, .addtask .btn { border-radius: 999px; }
+/* Keep pill controls while task-entry wrapper remains a softly rounded rectangle. */
 
-function draw() {
-  if (S.choosingGroup) return showGroupPicker();
-  document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("is-active", b.dataset.go === S.view));
-  $("content").innerHTML = { home, tasks, schedule, invites, directory, settings }[S.view]();
+/* Three states only in the aggregate availability grid:
+   .l0: nobody available; .l2: some available; .l4: all available. */
+.ov .c { border: 1px solid var(--line); border-radius: 9px; font-weight: 800; }
+.ov .c.l0 { background: #fbe3e6; border-color: #f5cbd1; color: #a72c4d; }
+.ov .c.l2 { background: #ffffff; border-color: #cfe0eb; color: #3281a5; }
+.ov .c.l4 { background: #def4e6; border-color: #c3e8d0; color: #176d46; }
+/* Also support semantic state names for future GCal availability integration. */
+.ov .c.none-available { background: #fbe3e6; border-color: #f5cbd1; color: #a72c4d; }
+.ov .c.some-available { background: #ffffff; border-color: #cfe0eb; color: #3281a5; }
+.ov .c.all-available { background: #def4e6; border-color: #c3e8d0; color: #176d46; }
+
+/* Mini schedules: airy rounded squares, separated by tiny gaps. */
+.mg { gap: 5px; }
+.mg .c {
+  height: 28px; line-height: 26px;
+  border: 1px solid #e9edf0; border-radius: 9px;
+  background: #ffffff; color: #74828a;
+  transition: background-color .14s ease, border-color .14s ease, transform .14s ease;
 }
+.mg .c.x { background: var(--u); border-color: var(--u); color: #ffffff; }
+.mg.me .c:hover { outline: none; border-color: var(--u); transform: translateY(-1px); }
+.mg.me .c:focus-visible { outline: 2px solid var(--u); outline-offset: 2px; }
+.pc { border-radius: 18px; }
+.pc.me { box-shadow: inset 0 0 0 1px var(--u); }
+/* Make time labels compact and consistent with the mini-grid height. */
+.mg b, .mg em { height: 28px; line-height: 28px; }
 
-function calendar() {
-  const d = S.month, y = d.getFullYear(), m = d.getMonth(), n = new Date(y, m + 1, 0).getDate();
-  const t0 = today().toLocaleDateString("en-CA");
-  let h = `<div class="cal-head"><button class="icon" data-m="-1" aria-label="Previous month">‹</button><h2>${d.toLocaleString("en", { month: "long", year: "numeric" })}</h2><button class="icon" data-m="1" aria-label="Next month">›</button></div><div class="cal">`;
-  h += ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((x) => `<b>${x}</b>`).join("") + "<span></span>".repeat(new Date(y, m, 1).getDay());
-  for (let i = 1; i <= n; i++) {
-    const iso = `${y}-${pad(m + 1)}-${pad(i)}`;
-    const ev = [
-      ...S.meetings.filter((x) => new Date(x.starts_at).toLocaleDateString("en-CA") === iso).map((x) => [x.title, "m"]),
-      ...S.gevents.filter((x) => x.day === iso && !S.meetings.some((m) => m.gcal_event_id === x.id)).map((x) => [x.title, "g"]),
-      ...S.tasks.filter((x) => x.due === iso && !isDone(x)).map((x) => [x.title, ""]),
-    ];
-    h += `<i class="${iso === t0 ? "today" : ""}">${i}${ev.slice(0, 2).map(([a, c]) => `<span class="chip ${c}">${esc(a)}</span>`).join("")}${ev.length > 2 ? `<small>+${ev.length - 2} more</small>` : ""}</i>`;
-  }
-  return h + `</div><p class="legend"><span><i class="dot c3"></i>Due dates</span><span><i class="dot c1"></i>Meetings</span><span><i class="dot c0"></i>Google Calendar</span></p>`;
+
+/* ===============================================================
+   COMPACT WARM-WHITE REFINEMENT
+   Warm off-white surfaces, smaller Nunito typography, tidy layout.
+   Overrides are kept together for easy editing.
+   =============================================================== */
+:root {
+  --bg: #fdfcf9;          /* very pale beige-white, not pure white */
+  --card: #fffefa;        /* warm-white cards */
+  --fill: #f8f7f3;        /* warm-gray input fields */
+  --line: #eeece6;
+  --ink: #263039;
+  --ink-soft: #718087;
+  --sand: #f7f4ec;
+  --r: 16px;
+  --gap: 13px;
+  --sh: 0 1px 3px rgba(54, 48, 34, .035);
 }
-
-const urg = (t) => { const d = left(t); return d < 0 ? "late" : d === 0 ? "today" : d <= 2 ? "soon" : d <= 7 ? "week" : "later"; };
-const goBtn = (view, label) => `<button type="button" class="icon go" data-goto="${view}" aria-label="${label}" title="${label}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></button>`;
-
-function home() {
-  const done = S.tasks.filter(isDone);
-  const open = S.tasks.filter((t) => !isDone(t)).sort(urgent);
-  const late = open.filter((t) => left(t) < 0).length;
-  const week = open.filter((t) => left(t) >= 0 && left(t) <= 7).length;
-  const pct = S.tasks.length ? Math.round((done.length / S.tasks.length) * 100) : 0;
-  const legend = S.cols.map((c, i) => `<span><i class="dot c${i % 5}"></i>${esc(c.name)} ${S.tasks.filter((t) => t.column_id === c.id).length}</span>`).join("");
-  const me = S.members.find((p) => p.id === S.user.id);
-  const load = S.members.map((p) => ({ name: nm(p), n: open.filter((t) => t.assignee === p.id).length, color: safeColor(p.preferred_color) }));
-  const unassigned = open.filter((t) => !t.assignee).length;
-  if (unassigned) load.push({ name: "Unassigned", n: unassigned, color: "#7286a0" });
-  const top = Math.max(1, ...load.map((x) => x.n));
-  const meets = S.meetings.filter((x) => new Date(x.starts_at) >= new Date()).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)).slice(0, 3);
-  return `<h1>Hi, ${esc(nm(me))}!</h1><p class="hint">Here’s where the project stands.</p>
-  <div class="stats">
-    <div class="stat s1"><b>${open.length}</b><span>Open tasks</span></div>
-    <div class="stat s2"><b>${week}</b><span>Due in 7 days</span></div>
-    <div class="stat s3"><b>${late}</b><span>Overdue</span></div>
-    <div class="stat s4"><b>${pct}%</b><span>Completed</span></div>
-  </div>
-  <section class="panel prog"><h2>Overall progress <small>${done.length} of ${S.tasks.length} tasks done</small></h2>
-    <progress max="${Math.max(S.tasks.length, 1)}" value="${done.length}"></progress>
-    <p class="legend">${legend}</p></section>
-  <div class="home"><section class="panel">${gbar()}${calendar()}</section>
-  <div class="stack">
-    <aside class="panel"><h2>Most pressing ${goBtn("tasks", "Open Tasks")}</h2>${open.slice(0, 5).map((t) => `<div class="row urg-${urg(t)}"><span class="urg-bar"></span><div><b>${esc(t.title)}</b><small>${esc(who(t))}</small></div><span class="due">${dueLabel(t)}</span></div>`).join("") || '<p class="empty">Nothing due. Add a task to get started.</p>'}</aside>
-    <aside class="panel"><h2>Team workload <span class="h2-end"><small>open tasks</small>${goBtn("tasks", "Open Tasks")}</span></h2>${load.map((x) => `<div class="load" style="--u:${x.color}"><span class="av-s">${esc(x.name.charAt(0).toUpperCase())}</span><span>${esc(x.name)}</span><progress class="work" max="${top}" value="${x.n}"></progress><b>${x.n}</b></div>`).join("")}</aside>
-    <aside class="panel"><h2>Upcoming meetings ${goBtn("schedule", "Open Schedule")}</h2>${meets.map((x) => { const d = new Date(x.starts_at); return `<div class="row mrow"><span class="dtile"><b>${d.getDate()}</b><small>${d.toLocaleString("en", { month: "short" })}</small></span><div><b>${esc(x.title)}</b><small>${d.toLocaleString("en", { weekday: "short", hour: "numeric", minute: "2-digit" })}</small></div></div>`; }).join("") || '<p class="empty">No meetings scheduled yet.</p>'}</aside>
-  </div></div>`;
-}
-
-const card = (t) => `<article class="tcard" draggable="true" data-id="${t.id}"><p>${esc(t.title)}</p>
-  <div class="meta"><span class="pill p${t.priority}">${PR[t.priority]}</span><span class="due ${left(t) < 0 && !isDone(t) ? "late" : ""}">${dueLabel(t)}</span></div>
-  <div class="meta"><small>${esc(who(t))}</small>
-  <select class="st${S.cols.findIndex((c) => c.id === (t.column_id || S.cols[0].id)) % 5}" data-move="${t.id}" aria-label="Status">${S.cols.map((c) => `<option value="${c.id}"${(t.column_id || S.cols[0].id) === c.id ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
-  <button type="button" class="icon" data-del="${t.id}" aria-label="Delete task">✕</button></div></article>`;
-
-function tasks() {
-  const opts = S.members.map((p) => `<option value="${p.id}">${esc(nm(p))}</option>`).join("");
-  return `<div class="bar"><div><h1>Tasks</h1><p class="hint">Sorted by due date, then priority. Drag cards between columns, or click a column name to rename it.</p></div>
-  <button type="button" class="btn btn-quiet" data-addcol>+ Add column</button></div>
-  <form class="addtask" data-form="task"><input name="title" placeholder="New task" required>
-  <input name="due" type="date" aria-label="Due date"><select name="priority" aria-label="Priority"><option value="3">High</option><option value="2" selected>Medium</option><option value="1">Low</option></select>
-  <select name="assignee" aria-label="Assignee"><option value="">Unassigned</option>${opts}</select><button class="btn">Add task</button></form>
-  <div class="board">` + S.cols.map((c, i) => {
-    const list = S.tasks.filter((t) => t.column_id === c.id || (!t.column_id && i === 0)).sort(urgent);
-    return `<section class="col" data-cid="${c.id}"><h2><input class="colname" data-rename="${c.id}" value="${esc(c.name)}" aria-label="Column name"><small>${list.length}</small>${list.length ? "" : `<button type="button" class="icon" data-delcol="${c.id}" aria-label="Delete empty column">✕</button>`}</h2>${list.map(card).join("") || '<p class="empty">Drop tasks here</p>'}</section>`;
-  }).join("") + "</div>";
-}
-
-function bestTimes(B) {
-  const free = (d, s) => S.members.every((p) => !B[p.id]?.has(`${d}-${s}`));
-  const out = [];
-  for (let d = 0; d < 6; d++) {
-    for (let s = 0; s < SLOTS; ) {
-      if (!free(d, s)) { s++; continue; }
-      let e = s;
-      while (e < SLOTS && free(d, e)) e++;
-      if (e - s >= 2) out.push({ d, s, e });
-      s = e;
-    }
-  }
-  return out.sort((a, b) => b.e - b.s - (a.e - a.s) || a.d - b.d || a.s - b.s).slice(0, 6);
-}
-
-function schedule() {
-  const B = {};
-  S.busy.forEach((r) => (B[r.user_id] ??= new Set()).add(`${r.day}-${r.slot}`));
-  const n = S.members.length;
-  const first = (p) => nm(p).split(" ")[0];
-  const best = S.busy.length ? bestTimes(B) : [];
-  const label = (free) => {
-    if (!free.length) return "Nobody";
-    if (free.length === n) return "All";
-    return free.map(first).join(", ");
-  };
-  // Left-side group overview; the same 32 half-hour rows as each mini-calendar.
-  let ov = `<section class="availability-overview"><div class="overview-title">Group availability <small>08:00 AM – 12:00 AM</small></div><div class="g ov"><span class="time-head">TIME</span>${FULL.map((d) => `<b>${d.slice(0, 3)}</b>`).join("")}`;
-  for (let s = 0; s < SLOTS; s++) {
-    ov += `<em>${tl(s)}</em>`;
-    for (let d = 0; d < 6; d++) {
-      const free = S.members.filter((p) => !B[p.id]?.has(`${d}-${s}`));
-      const state = free.length === n ? "l4" : free.length ? "l2" : "l0";
-      const names = label(free);
-      ov += `<i class="c ${state}" title="${esc(free.map(nm).join(", ") || "Nobody")}">${esc(names)}</i>`;
-    }
-  }
-  ov += `</div></section>`;
-  const ordered = [...S.members].sort((a, b) => (b.id === S.user.id) - (a.id === S.user.id));
-  const members = ordered.map((p) => {
-    const me = p.id === S.user.id;
-    const set = me ? S.mine : B[p.id] || new Set();
-    const color = safeColor(p.preferred_color);
-    let markup = `<section class="person-schedule${me ? " is-mine" : ""}" style="--u:${color}"><div class="person-schedule-title"><span class="member-indicator" style="background:${color}"></span><strong>${esc(nm(p))}${me ? " (you)" : ""}</strong><small>${set.size / 2}h busy</small></div><div class="g mg${me ? " me" : ""}"><span class="mini-time-head"></span>${DAYS.map((d) => `<b>${d}</b>`).join("")}`;
-    for (let s = 0; s < SLOTS; s++) {
-      markup += `<em>${s % 4 === 0 ? th(s) : ""}</em>`;
-      for (let d = 0; d < 6; d++) {
-        const busy = set.has(`${d}-${s}`);
-        markup += `<i class="c${busy ? " x" : ""}" title="${esc(`${FULL[d]}, ${tl(s)} — ${busy ? "Unavailable" : "Available"}`)}"${me ? ` data-d="${d}" data-s="${s}"` : ""}></i>`;
-      }
-    }
-    return markup + `</div></section>`;
-  }).join("");
-  return `<div class="schedule-page"><div class="bar schedule-head"><div><h1>Schedule</h1><p class="hint" id="sv-hint">${S.dirty ? "Unsaved changes — save your availability." : "Mark the squares when you're unavailable. Scroll sideways to view everyone."}</p></div>
-    <div class="actions"><button type="button" class="btn btn-quiet" data-act="clear">Clear mine</button><button type="button" class="btn" data-act="save">Save availability</button></div></div>
-    <section class="schedule-best"><strong>Best times to meet</strong><div class="schedule-best-list">${best.map((x) => `<span class="tag"><b>${FULL[x.d]}</b> ${tl(x.s)} – ${tl(x.e)}</span>`).join("") || `<span class="schedule-muted">${S.busy.length ? "No common 1-hour slot yet." : "Save your availability to see suggestions."}</span>`}</div></section>
-    <div class="schedule-legend"><span><i class="dot l4"></i>Everyone free</span><span><i class="dot l2"></i>Some free</span><span><i class="dot l0"></i>Nobody</span><span class="schedule-legend-tip">Your colored squares = unavailable</span></div>
-    <div class="schedule-scroll" role="region" aria-label="Group and individual availability calendars" tabindex="0"><div class="schedule-track">${ov}<div class="member-calendars">${members}</div></div></div></div>`;
+html { font-size: 14px; }
+body { font-family: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif; font-size: .94rem; line-height: 1.42; background: var(--bg); }
+h1, .title { font-size: 1.55rem; font-weight: 800; line-height: 1.2; }
+h2 { font-size: 1rem; font-weight: 800; margin-bottom: 11px; }
+h3 { font-size: .94rem; }
+small, .hint, .subtitle { font-size: .85rem; }
+.subtitle { margin-bottom: 17px; }
+.hint { margin: 3px 0 16px; }
+.content { background: var(--bg); padding: 25px 28px; }
+.side { background: #fffefa; gap: 15px; padding: 18px 14px; }
+.brand { font-size: .97rem; line-height: 1.2; }
+.logo { width: 35px; height: 35px; border-radius: 12px; }
+.group { padding: 10px 13px; border-radius: 15px; font-size: .8rem; background: var(--fill); }
+#nav { gap: 4px; }
+#nav button { height: 39px; padding: 0 13px; gap: 11px; font-size: .89rem; font-weight: 700; }
+.ic { width: 17px; height: 17px; }
+.who { font-size: .76rem; }
+.panel { padding: 17px; border: 1px solid var(--line); box-shadow: none; }
+.card { padding: 25px 23px; background: var(--card); border-radius: 20px; box-shadow: var(--sh); }
+.btn { height: 36px; padding: 0 17px; font-size: .86rem; font-weight: 800; }
+.btn-quiet { background: var(--sand); }
+.icon { width: 31px; height: 31px; font-size: .86rem; }
+input, select { height: 36px; padding-left: 14px; padding-right: 14px; font-size: .86rem; background-color: var(--fill); }
+select { padding-right: 32px; background-position: right 12px center; }
+textarea { font-size: .86rem; padding: 10px 14px; }
+.field { font-size: .85rem; gap: 5px; }
+.tabs { gap: 18px; margin-bottom: 16px; }
+.tab { font-size: .88rem; }
+.bar { gap: 12px; }
+.actions { gap: 8px; }
+.stats { gap: 12px; margin-bottom: 12px; }
+.stat { padding: 13px 16px; }
+.stat b { font-size: 1.65rem; }
+.stat span { font-size: .78rem; }
+.home, .stack, .dir, .members { gap: 12px; }
+.row { padding: 9px 13px; border-radius: 13px; }
+.cal i { min-height: 73px; border-radius: 11px; font-size: .74rem; }
+.cal b, .chip { font-size: .73rem; }
+.load { font-size: .82rem; }
+/* Task entry wrapper stays a rounded rectangle, NOT a capsule. */
+.addtask { padding: 13px; gap: 9px; margin-bottom: 13px; border-radius: 15px; background: var(--card); border: 1px solid var(--line); box-shadow: none; }
+.addtask input, .addtask select, .addtask .btn { height: 36px; border-radius: 999px; }
+.board { gap: 12px; grid-auto-columns: minmax(260px, 1fr); }
+.col { padding: 12px; min-height: 145px; border-radius: 17px; }
+.col h2 { font-size: .94rem; margin-bottom: 10px; }
+.colname { font-size: .93rem; height: 32px; font-weight: 800; }
+.col h2 .icon { width: 26px; height: 26px; }
+.col .empty { padding: 12px 13px; font-size: .85rem; }
+.tcard { padding: 12px 13px; border-radius: 14px; box-shadow: 0 1px 3px rgba(54,48,34,.04); }
+.tcard p { font-size: .89rem; margin-bottom: 8px; }
+.meta select { height: 29px; font-size: .76rem; }
+.pill, .tag { font-size: .72rem; height: 22px; }
+.person { padding: 16px; border-radius: 16px; }
+.person header { padding: 9px 12px; border-radius: 12px; }
+.tbl { font-size: .82rem; }
+.tbl th { font-size: .75rem; }
+.tbl td { padding: 10px; }
+.best .tag { height: 32px; font-size: .8rem; padding: 0 13px; }
+.g h3 { font-size: .85rem; height: 30px; }
+.g { font-size: .7rem; }
+.ov .c { font-size: .68rem; border-radius: 8px; }
+.pc { padding: 14px; border-radius: 16px; }
+.mg { gap: 4px; }
+.mg .c { height: 26px; line-height: 24px; border-radius: 8px; }
+.mg b, .mg em { height: 26px; line-height: 26px; }
+@media (max-width: 860px) {
+  .content { padding: 18px 13px; }
+  .side, .mini .side { padding: 12px; }
+  #nav button { height: 37px; }
 }
 
-/* ---------- Google Calendar ---------- */
-async function gapi(path, opts = {}) {
-  const r = await fetch("https://www.googleapis.com/calendar/v3/" + path, { ...opts, headers: { Authorization: "Bearer " + S.gtoken, "Content-Type": "application/json" } });
-  if (r.status === 401) { S.gtoken = null; throw new Error("Google session expired. Click Connect Google Calendar again."); }
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error?.message || "Google Calendar error");
-  return j;
+/* Schedule layout: compact overview + sideways-scrolling member calendars.
+   Keeps the page's soft, warm off-white appearance. */
+.hscroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #dedbd3 transparent;
+}
+/* The overview uses tighter day columns and shorter rows to reduce page height. */
+.ov {
+  grid-template-columns: 56px repeat(6, minmax(66px, 1fr));
+  min-width: 460px;
+  font-size: .67rem;
+}
+.ov h3 { height: 25px; margin-bottom: 3px; font-size: .78rem; }
+.ov .c {
+  height: 23px;
+  line-height: 21px;
+  padding: 0 3px;
+  border-radius: 7px;
+  font-size: .64rem;
+}
+.ov b, .ov em { height: 23px; line-height: 23px; font-size: .64rem; }
+/* Member calendars form one horizontal strip instead of wrapping into rows. */
+.members {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 224px;
+  grid-template-columns: none;
+  gap: 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: start;
+  padding: 2px 2px 9px;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #dedbd3 transparent;
+}
+.members .pc { min-width: 0; padding: 11px; border-radius: 15px; }
+.members .g h3 { height: 25px; margin-bottom: 3px; font-size: .76rem; }
+/* Six equal-sized day slots: strictly square even on wide screens. */
+.mg {
+  grid-template-columns: 28px repeat(6, 23px);
+  gap: 4px;
+  width: max-content;
+}
+.mg .c {
+  width: 23px;
+  height: 23px;
+  min-width: 23px;
+  min-height: 23px;
+  padding: 0;
+  border-radius: 6px;
+  line-height: 21px;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+}
+.mg b, .mg em { height: 23px; line-height: 23px; font-size: .64rem; }
+.mg .c.x { background-color: var(--u); border-color: var(--u); }
+/* Shorter vertical rhythm for the schedule sections. */
+.best { margin-bottom: 10px; }
+.sub { margin: 14px 0 9px; }
+@media (max-width: 860px) {
+  .ov { min-width: 460px; }
+  .members { grid-auto-columns: 214px; }
 }
 
-function gconnect() {
-  if (GOOGLE_CLIENT_ID.startsWith("PASTE")) return alert("Add your Google client ID at the top of app.js first.");
-  if (!window.google?.accounts?.oauth2) return alert("Google sign-in is still loading. Try again in a moment.");
-  google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID, scope: GSCOPES,
-    callback: async (r) => { if (r.error) return alert(r.error); S.gtoken = r.access_token; S.gerr = ""; await gload(); draw(); },
-  }).requestAccessToken();
+/* Auth and multi-group workspace additions */
+:root { --bg: #fdfcf9; --card: #ffffff; --fill: #f8f7f3; --line: #ece9e2; }
+.page { background: #fdfcf9; }
+.auth-card { background: #fff; border: 1px solid #edeae3; box-shadow: 0 2px 12px rgba(60,50,30,.035); }
+.google-login { margin-top: 13px; }
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 15px 0 12px; color: #96938d; font-size: .72rem; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: #ebe8e1; }
+.google-btn { display: flex; justify-content: center; align-items: center; gap: 10px; width: 100%; min-height: 40px; border: 1px solid #e8e5df; border-radius: 999px; background: #fff; color: #30383f; font: inherit; font-size: .82rem; font-weight: 800; cursor: pointer; }
+.google-btn:hover { background: #faf9f6; }
+.google-btn:disabled { opacity: .65; cursor: wait; }
+.group-switch { width: 100%; text-align: left; cursor: pointer; border: 1px solid transparent; color: var(--ink); font: inherit; }
+.group-switch:hover { border-color: var(--teal-b); background: #f5f8f6; }
+.group-switch-hint { font-size: .7rem; color: var(--teal-t) !important; margin-top: 3px; }
+.workspace-head { margin-bottom: 18px; }
+.workspace-list { display: grid; gap: 9px; max-width: 680px; }
+.workspace-item { display: flex; gap: 12px; align-items: center; width: 100%; padding: 13px 15px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); text-align: left; font: inherit; color: var(--ink); cursor: pointer; }
+.workspace-item:hover { background: #fcfbf7; border-color: #dedbd2; }
+.workspace-badge { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 12px; background: var(--sky); color: var(--sky-t); font-weight: 800; }
+.workspace-info { display: grid; flex: 1; gap: 1px; font-size: .83rem; }
+.workspace-info small { font-size: .71rem; }
+.workspace-forms { max-width: 750px; margin-top: 17px; }
+.workspace-forms .person { border: 1px solid var(--line); box-shadow: none; }
+.workspace-empty { color: var(--ink-soft); font-size: .83rem; }
+.mini .group-switch { width: 48px; overflow: hidden; padding: 10px 6px; }
+.mini .group-switch > * { display: none; }
+.mini .group-switch::before { content: "⇄"; display: block; text-align: center; color: var(--teal-t); }
+@media (max-width: 860px) { .group-switch { display: grid; width: 100%; } .mini .group-switch { width: 100%; } }
+
+/* === 2026: Compact schedule inspired by the shared reference === */
+:root { --bg: #fdfcf9; --card: #fffefa; --fill: #f8f7f3; --line: #e9e6df; }
+body, .content { background: var(--bg); }
+.page { background: var(--bg); }
+.auth-card, .panel, .person, .settings-card { background: #fff; }
+input::placeholder, textarea::placeholder { color: #979b9c; font-weight: 500; opacity: 1; }
+#nav [data-go="settings"] .ic { color: var(--lilac-d); }
+#nav [data-go="settings"].is-active { background: var(--lilac); color: var(--lilac-t); }
+/* Contain the schedule vertically and scroll along one horizontal rail. */
+#content:has(.schedule-page) { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; padding: 17px 20px; }
+.schedule-page { --s-cell: clamp(12px, calc((100dvh - 247px) / 33), 19px); display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; gap: 8px; }
+.schedule-head { align-items: center; gap: 8px; flex: none; }
+.schedule-head h1 { font-size: 1.25rem; }
+.schedule-head .hint { margin: 2px 0 0; font-size: .71rem; }
+.schedule-head .btn { height: 31px; padding: 0 12px; font-size: .72rem; }
+.schedule-best { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; flex: none; padding: 7px 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; font-size: .71rem; }
+.schedule-best > strong { white-space: nowrap; }
+.schedule-best-list { display: flex; gap: 5px; overflow-x: auto; white-space: nowrap; }
+.schedule-best .tag { height: 24px; font-size: .68rem; font-weight: 600; padding: 0 9px; background: var(--teal); color: var(--teal-t); }
+.schedule-muted { color: var(--ink-soft); }
+.schedule-legend { display: flex; flex: none; gap: 13px; flex-wrap: wrap; align-items: center; font-size: .68rem; color: var(--ink-soft); }
+.schedule-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.schedule-legend .dot { margin: 0; width: 9px; height: 9px; border-radius: 3px; }
+.schedule-legend .dot.l0 { background: #f5cbd1; } .schedule-legend .dot.l2 { background: white; border-color: #cbd8e5; } .schedule-legend .dot.l4 { background: #c6ebd6; }
+.schedule-scroll { flex: 1; min-height: 0; width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 13px; background: #fff; scrollbar-width: thin; scrollbar-color: #ccc6b9 #f8f7f3; }
+.schedule-track { display: flex; align-items: flex-start; gap: 14px; width: max-content; min-height: 100%; padding: 10px 12px; }
+.availability-overview { width: 645px; flex: none; }
+.overview-title, .person-schedule-title { display: flex; align-items: center; gap: 7px; height: 27px; padding: 0 7px; border-radius: 6px 6px 0 0; background: #eef3f2; font-weight: 800; font-size: .74rem; color: #496a68; }
+.overview-title small, .person-schedule-title small { margin-left: auto; font-size: .62rem; font-weight: 600; }
+.schedule-track .g { font-size: .63rem; gap: 1px; }
+.schedule-track .g b, .schedule-track .g em, .schedule-track .g .c { height: var(--s-cell); min-height: 0; line-height: calc(var(--s-cell) - 1px); margin: 0; padding-top: 0; padding-bottom: 0; }
+.schedule-track .g b { text-align: center; background: #edf5f5; color: #5e777d; font-size: .61rem; }
+.schedule-track .g em { color: #71818a; font-size: .55rem; font-weight: 700; white-space: nowrap; }
+.schedule-track .ov { min-width: 0; width: 100%; grid-template-columns: 70px repeat(6, 1fr); gap: 1px; }
+.schedule-track .ov .c { border: 0; border-radius: 3px; padding: 0 2px; font-size: .59rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: normal; }
+.schedule-track .ov .c.l0 { color: #a52a45; background: #f9d9dd; }
+.schedule-track .ov .c.l2 { color: #357d9b; background: #fff; outline: 1px solid #edf0ed; outline-offset: -1px; }
+.schedule-track .ov .c.l4 { color: #226f4a; background: #daf2e2; }
+.member-calendars { display: flex; flex: none; align-items: flex-start; gap: 11px; }
+.person-schedule { flex: none; padding: 0; border: 1px solid #e8e7e0; border-radius: 8px; background: #fff; overflow: hidden; }
+.person-schedule-title { justify-content: center; background: color-mix(in srgb, var(--u) 16%, white); color: #394852; padding: 0 5px; }
+.person-schedule-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 76px; }
+.member-indicator { width: 7px; height: 7px; flex: none; border-radius: 50%; }
+.schedule-track .mg { grid-template-columns: 33px repeat(6, var(--s-cell)); width: max-content; gap: 1px; padding: 0 3px 3px; }
+.schedule-track .mg .c { width: var(--s-cell); min-width: 0; height: var(--s-cell); min-height: 0; aspect-ratio: 1; padding: 0; border: 1px solid #e5e9e6; border-radius: 3px; background: #fff; }
+.schedule-track .mg .c.x { background: var(--u); border-color: var(--u); }
+.schedule-track .mg em { font-size: .5rem; padding-right: 3px; }
+.schedule-track .mg.me .c { cursor: crosshair; }
+.schedule-track .mg.me .c:hover { outline: 1px solid var(--u); outline-offset: -1px; }
+.person-schedule.is-mine { border-color: color-mix(in srgb, var(--u) 55%, white); }
+/* Settings page */
+.settings-page { max-width: 690px; }
+.settings-card { padding: 22px; display: grid; gap: 13px; }
+.settings-card h2 { margin: 8px 0 0; font-size: .94rem; }
+.settings-card .field input { max-width: 430px; }
+.settings-note { margin: -5px 0 4px; color: var(--ink-soft); font-size: .73rem; }
+.color-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.color-option { position: relative; display: flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 14px; font-size: .73rem; cursor: pointer; }
+.color-option input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.color-option:has(input:checked) { border-color: var(--teal-d); background: var(--teal); }
+.color-option:has(input:focus-visible) { outline: 2px solid var(--teal-d); }
+.color-swatch { width: 16px; height: 16px; border-radius: 6px; }
+.theme-options { display: flex; gap: 10px; }
+.theme-options label { display: flex; align-items: center; gap: 7px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: .78rem; cursor: pointer; }
+.theme-options input { width: 16px; height: 16px; accent-color: var(--teal-d); }
+.settings-feedback { font-size: .76rem; margin: 0; color: var(--teal-t); }
+.settings-card > button.btn { justify-self: start; }
+/* Dark mode: all primary surfaces and content states are darker, not only the scheduler. */
+html[data-theme="dark"] { --bg: #191d23; --card: #242b34; --fill: #303945; --line: #3d4754; --ink: #edf1f2; --ink-soft: #abb8c3; --sand: #343b43; --sand-t: #e2d7c5; --teal: #254c48; --teal-b: #3c7267; --teal-t: #b4eee0; --sky: #2c435b; --sky-t: #b7d6f5; --blush: #573342; --blush-t: #ffd0df; --butter: #544936; --butter-t: #fae1a3; --lilac: #413657; --lilac-t: #ddd1ff; }
+html[data-theme="dark"] body, html[data-theme="dark"] .page, html[data-theme="dark"] .content, html[data-theme="dark"] .side { background: var(--bg); color: var(--ink); }
+html[data-theme="dark"] .panel, html[data-theme="dark"] .person, html[data-theme="dark"] .settings-card, html[data-theme="dark"] .auth-card, html[data-theme="dark"] .schedule-scroll, html[data-theme="dark"] .schedule-best, html[data-theme="dark"] .person-schedule, html[data-theme="dark"] .workspace-item, html[data-theme="dark"] .tcard, html[data-theme="dark"] .schedule-track .mg .c:not(.x) { background: var(--card); color: var(--ink); border-color: var(--line); }
+html[data-theme="dark"] input:not([type="radio"]), html[data-theme="dark"] select, html[data-theme="dark"] textarea, html[data-theme="dark"] .addtask, html[data-theme="dark"] .group { background-color: var(--fill); color: var(--ink); border-color: var(--line); }
+html[data-theme="dark"] .col { background: #303b4a; }
+html[data-theme="dark"] .col:nth-child(5n+2) { background: #4c4235; }
+html[data-theme="dark"] .col:nth-child(5n+3) { background: #274b45; }
+html[data-theme="dark"] .col:nth-child(5n+4) { background: #4e3440; }
+html[data-theme="dark"] .col:nth-child(5n+5) { background: #3e3757; }
+html[data-theme="dark"] .schedule-track .ov .c.l2 { background: var(--card); color: #b4dfff; outline-color: var(--line); }
+html[data-theme="dark"] .schedule-track .ov .c.l4 { background: #224536; color: #b1edcb; }
+html[data-theme="dark"] .schedule-track .ov .c.l0 { background: #592e3b; color: #ffd2da; }
+html[data-theme="dark"] .overview-title, html[data-theme="dark"] .person-schedule-title, html[data-theme="dark"] .schedule-track .g b { background: #34404b; color: #d9e5eb; }
+html[data-theme="dark"] .row, html[data-theme="dark"] .group, html[data-theme="dark"] .cal i, html[data-theme="dark"] .workspace-item, html[data-theme="dark"] .google-btn { background: var(--card); color: var(--ink); border-color: var(--line); }
+html[data-theme="dark"] .btn-quiet, html[data-theme="dark"] .icon { background: var(--fill); color: var(--ink); }
+html[data-theme="dark"] .person header { background: var(--fill); color: var(--ink); }
+@media (max-width: 860px) { #content:has(.schedule-page) { height: calc(100dvh - 88px); padding: 12px; } .schedule-page { --s-cell: clamp(11px, calc((100dvh - 290px) / 33), 16px); } .availability-overview { width: 580px; } }
+
+/* ===============================================================
+   Refinement: profile colors, separate schedule cards, fixed board
+   columns, group picker, settings and sidebar.
+   =============================================================== */
+:root { --sh-card: 0 1px 2px rgba(23, 38, 54, .05), 0 6px 18px rgba(23, 38, 54, .04); }
+
+/* Directory: every profile uses the member's own color (same one as their schedule) */
+.dir .person:nth-child(n) { border: 1px solid var(--line); }
+.dir .person:nth-child(n) header { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 0; border-radius: 16px; background: color-mix(in srgb, var(--u, #4f94dc) 16%, var(--card)); color: var(--ink); }
+.p-av { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--u, #4f94dc) 55%, var(--card)); color: var(--ink); font-weight: 800; }
+.p-id { display: grid; min-width: 0; line-height: 1.3; }
+.p-id strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+.p-id small { color: var(--ink-soft); font-weight: 600; }
+
+/* Task board: fixed-width columns instead of stretching across the page */
+.board { grid-auto-columns: 304px; justify-content: start; }
+
+/* Schedule: the overview and every person get their own card on one sideways rail */
+.schedule-scroll { padding: 2px 2px 14px; border: 0; border-radius: 0; background: transparent; }
+.schedule-track { gap: 14px; padding: 2px 2px 0; }
+.member-calendars { gap: 14px; }
+.availability-overview, .person-schedule { padding: 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); box-shadow: var(--sh-card); overflow: visible; }
+.overview-title, .person-schedule-title { height: 32px; margin-bottom: 8px; padding: 0 12px; border-radius: 12px; background: var(--fill); color: var(--ink); font-size: .78rem; }
+.person-schedule-title { justify-content: flex-start; background: color-mix(in srgb, var(--u) 14%, var(--card)); }
+.person-schedule-title strong { max-width: 110px; }
+.person.is-mine, .person-schedule.is-mine { border-color: color-mix(in srgb, var(--u) 45%, var(--card)); }
+.schedule-track .g { gap: 2px; }
+.schedule-track .g b { border-radius: 6px; background: transparent; color: var(--ink-soft); }
+.schedule-track .mg { padding: 0; }
+.schedule-track .mg .c { border: 0; border-radius: 5px; background: var(--fill); }
+.schedule-track .mg .c.x { background: color-mix(in srgb, var(--u) 50%, var(--card)); }
+.schedule-track .mg.me .c:hover { outline: 2px solid color-mix(in srgb, var(--u) 70%, var(--card)); outline-offset: -1px; }
+/* softer availability states */
+.schedule-track .ov .c { border-radius: 5px; }
+.schedule-track .ov .c.l0 { background: #fbebed; color: #b4566a; }
+.schedule-track .ov .c.l2 { background: var(--card); color: #4b8aa8; outline: 1px solid var(--line); }
+.schedule-track .ov .c.l4 { background: #e7f6ed; color: #3b8a62; }
+.schedule-legend .dot.l0 { background: #f7d6db; } .schedule-legend .dot.l4 { background: #cdeedb; }
+@media (min-width: 861px) { .schedule-page { --s-cell: clamp(11px, calc((100dvh - 300px) / 33), 19px); } }
+
+/* Group picker */
+.workspace { display: grid; gap: 28px; max-width: 900px; margin: 0 auto; padding-top: 12px; }
+.workspace-head { display: flex; align-items: center; gap: 16px; margin: 0; }
+.workspace-head .hint { margin: 2px 0 0; }
+.workspace-mark { display: grid; place-items: center; flex: none; width: 54px; height: 54px; border-radius: 18px; background: var(--teal); color: var(--teal-t); }
+.workspace-mark .ic { width: 26px; height: 26px; }
+.workspace-section h2 { margin-bottom: 12px; justify-content: flex-start; }
+.workspace-list { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; max-width: none; }
+.workspace-item { gap: 14px; padding: 14px 16px; border-radius: 18px; box-shadow: var(--sh-card); transition: transform .12s ease, border-color .12s ease; }
+.workspace-item:hover { background: var(--card); border-color: var(--teal-d); transform: translateY(-1px); }
+.workspace-badge { width: 44px; height: 44px; border-radius: 14px; font-size: 1.05rem; }
+.workspace-item.h1 .workspace-badge { background: var(--butter); color: var(--butter-t); }
+.workspace-item.h2 .workspace-badge { background: var(--teal); color: var(--teal-t); }
+.workspace-item.h3 .workspace-badge { background: var(--blush); color: var(--blush-t); }
+.workspace-item.h4 .workspace-badge { background: var(--lilac); color: var(--lilac-t); }
+.workspace-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-go { margin-left: auto; color: var(--ink-soft); font-size: 1.4rem; line-height: 1; }
+.workspace-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--gap); }
+.workspace-card { display: grid; gap: 12px; align-content: start; padding: 22px; border: 1px solid var(--line); border-radius: 22px; background: var(--card); box-shadow: var(--sh-card); }
+.workspace-card h2 { margin: 0; }
+.workspace-card > p { margin: -6px 0 4px; color: var(--ink-soft); font-size: .85rem; font-weight: 600; }
+.workspace-card .btn { justify-self: start; }
+.ws-ic { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 14px; }
+.ws-ic.c-sky { background: var(--sky); color: var(--sky-t); } .ws-ic.c-blush { background: var(--blush); color: var(--blush-t); }
+
+/* Settings */
+.settings-page { max-width: 780px; }
+.settings-card { display: block; padding: 0; border: 1px solid var(--line); border-radius: 22px; background: var(--card); box-shadow: var(--sh-card); overflow: hidden; }
+.set-row { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 24px; padding: 24px 26px; border-bottom: 1px solid var(--line); }
+.set-label h2 { margin: 0 0 2px; font-size: .98rem; justify-content: flex-start; }
+.set-label p { margin: 0; color: var(--ink-soft); font-size: .8rem; font-weight: 600; }
+.set-body { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.settings-card .field input { max-width: 380px; }
+.settings-note { margin: 0; color: var(--ink-soft); font-size: .78rem; font-weight: 600; }
+.color-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 440px; }
+.color-option { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--card); font-size: .82rem; font-weight: 700; }
+.color-option:has(input:checked) { border-color: var(--teal-d); background: var(--teal); color: var(--teal-t); }
+.color-swatch { width: 20px; height: 20px; flex: none; border-radius: 50%; background: color-mix(in srgb, var(--u) 55%, var(--card)); }
+.theme-options { display: flex; flex-wrap: wrap; gap: 14px; }
+.theme-tile { position: relative; display: grid; justify-items: center; gap: 8px; border: 0; padding: 0; cursor: pointer; font-size: .82rem; font-weight: 700; }
+.theme-tile input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.theme-preview { width: 120px; height: 76px; border: 2px solid var(--line); border-radius: 16px; }
+.theme-preview.is-light { background: linear-gradient(90deg, #eef1f2 0 28%, #ffffff 28%); }
+.theme-preview.is-dark { background: linear-gradient(90deg, #2e3640 0 28%, #1c2229 28%); }
+.theme-tile:has(input:checked) .theme-preview { border-color: var(--teal-d); box-shadow: 0 0 0 3px var(--teal); }
+.theme-tile:has(input:focus-visible) .theme-preview { outline: 2px solid var(--teal-d); outline-offset: 2px; }
+.set-foot { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 18px 26px; background: var(--fill); }
+.settings-feedback { margin: 0 auto 0 0; color: var(--teal-t); font-size: .82rem; font-weight: 700; }
+
+/* Sidebar */
+.side { gap: 18px; }
+.group-switch { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.group-switch:hover { border-color: var(--teal-b); background: var(--fill); }
+.gs-badge { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 11px; background: var(--sky); color: var(--sky-t); font-weight: 800; }
+.gs-text { display: grid; flex: 1; min-width: 0; line-height: 1.25; }
+.gs-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; font-weight: 800; }
+.gs-text span { color: var(--ink-soft); font-size: .72rem; font-weight: 600; }
+.gs-chev { width: 16px; height: 16px; color: var(--ink-soft); }
+.side > #nav { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+#nav button { height: 42px; gap: 12px; padding: 0 14px; font-size: .9rem; }
+#nav [data-go="settings"] { margin-top: auto; }
+.account { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+.account-badge { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--lilac); color: var(--lilac-t); font-weight: 800; }
+.account .who { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .76rem; }
+.account .icon { flex: none; }
+.mini .group-switch { width: 46px; padding: 6px; justify-content: center; }
+.mini .group-switch::before { content: none; }
+.mini .group-switch > .gs-badge { display: grid; }
+.mini .side > #nav { align-items: center; }
+.mini .account { flex-direction: column; padding: 8px 4px; border: 0; background: none; }
+@media (min-width: 861px) { .side { position: sticky; top: 0; align-self: start; height: 100dvh; overflow-y: auto; } }
+@media (max-width: 860px) {
+  .group-switch { flex: 1; width: auto; min-width: 180px; }
+  .side > #nav { flex: none; flex-direction: row; }
+  #nav [data-go="settings"] { margin-top: 0; }
+  .account { border: 0; padding: 0; background: none; }
+  .set-row { grid-template-columns: 1fr; gap: 14px; padding: 20px; }
+  .color-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .set-foot { padding: 16px 20px; }
 }
 
-async function gload() {
-  if (!S.gtoken) return;
-  try {
-    if (!S.gcals.length) S.gcals = (await gapi("users/me/calendarList?minAccessRole=reader")).items || [];
-    if (!S.group.gcal_id) { S.gevents = []; return; }
-    const y = S.month.getFullYear(), m = S.month.getMonth();
-    const q = new URLSearchParams({ timeMin: new Date(y, m, 1).toISOString(), timeMax: new Date(y, m + 1, 1).toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "250" });
-    const j = await gapi(`calendars/${encodeURIComponent(S.group.gcal_id)}/events?${q}`);
-    S.gevents = (j.items || []).map((e) => ({ id: e.id, title: e.summary || "(No title)", day: e.start.date || new Date(e.start.dateTime).toLocaleDateString("en-CA") }));
-    S.gerr = "";
-  } catch (err) { S.gerr = err.message; }
+/* ===============================================================
+   Round 3: home cards, yellow meetings/today, light progress bars,
+   group dropdown, smaller logo, wider color range, meetings table.
+   =============================================================== */
+:root {
+  --orange: #fde6d3; --orange-d: #ec9a55; --orange-t: #9a4a10;
+  --red: #fde3e1; --red-d: #e86b66; --red-t: #a52a2a;
+  --yellow: #ffeaa3;
+}
+html[data-theme="dark"] {
+  --orange: #58402e; --orange-t: #ffd2a8; --red: #582f31; --red-t: #ffc9c6; --yellow: #574b28;
 }
 
-function gbar() {
-  const opts = S.gcals.map((c) => `<option value="${esc(c.id)}"${c.id === S.group.gcal_id ? " selected" : ""}>${esc(c.summary)}</option>`).join("");
-  return `<div class="gbar">${S.gtoken
-    ? `<span class="tag p1">Google connected</span><select data-gcal aria-label="Group calendar"><option value="">Pick the group’s calendar</option>${opts}</select>`
-    : `<button type="button" class="btn" data-act="gconnect">Connect Google Calendar</button>${S.group.gcal_id ? "<small>Your group has a shared calendar. Connect to show it here.</small>" : ""}`}
-    ${S.gerr ? `<small class="bad">${esc(S.gerr)}</small>` : ""}</div>`;
+/* Logo: small, round and cute like the other icons */
+.logo { width: 30px; height: 30px; border-radius: 50%; background: var(--teal); color: var(--teal-t); }
+.logo .ic { width: 18px; height: 18px; }
+.brand { font-size: .98rem; }
+
+/* Calendar: today and meetings are yellow */
+.cal i.today { background: var(--butter); border-color: var(--butter-d); }
+.chip.m { background: var(--yellow); color: #6f5200; }
+.today .chip.m { background: var(--card); }
+.gbar { justify-content: flex-end; }
+
+/* Progress bars: light fills */
+progress::-webkit-progress-value { background: #a6dfce; }
+progress::-moz-progress-bar { background: #a6dfce; }
+progress.work::-webkit-progress-value { background: color-mix(in srgb, var(--u, #4f94dc) 48%, var(--card)); }
+progress.work::-moz-progress-bar { background: color-mix(in srgb, var(--u, #4f94dc) 48%, var(--card)); }
+html[data-theme="dark"] progress::-webkit-progress-value { background: #3b8c7a; }
+html[data-theme="dark"] progress::-moz-progress-bar { background: #3b8c7a; }
+
+/* Home cards */
+.panel h2 .go, .panel h2 .h2-end .go { width: 30px; height: 30px; background: var(--fill); color: var(--ink-soft); }
+.panel h2 .go .ic { width: 16px; height: 16px; }
+.h2-end { display: inline-flex; align-items: center; gap: 10px; }
+.row { position: relative; padding: 12px 16px 12px 26px; overflow: hidden; }
+.urg-bar { position: absolute; left: 10px; top: 12px; bottom: 12px; width: 4px; border-radius: 4px; background: var(--ub, var(--line)); }
+.row small { color: var(--ink-soft); }
+.row[class*="urg-"], html[data-theme="dark"] .row[class*="urg-"] { background: var(--card); border: 1px solid var(--line); }
+.row[class*="urg-"] .due { display: inline-flex; align-items: center; height: 26px; padding: 0 12px; border-radius: 999px; background: var(--pb); color: var(--pt); font-size: .78rem; font-weight: 800; }
+.row.urg-late { --ub: var(--red-d); --pb: var(--red); --pt: var(--red-t); }
+.row.urg-today { --ub: var(--orange-d); --pb: var(--orange); --pt: var(--orange-t); }
+.row.urg-soon { --ub: var(--butter-d); --pb: var(--butter); --pt: var(--butter-t); }
+.row.urg-week { --ub: var(--teal-d); --pb: var(--teal); --pt: var(--teal-t); }
+.row.urg-later { --ub: var(--sky-d); --pb: var(--sky); --pt: var(--sky-t); }
+.mrow { gap: 12px; justify-content: flex-start; background: var(--butter); padding-left: 12px; }
+html[data-theme="dark"] .mrow { background: var(--butter); }
+.dtile { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 12px; background: var(--card); line-height: 1.05; }
+.dtile b { font-size: 1.05rem; }
+.dtile small { font-size: .62rem; font-weight: 800; text-transform: uppercase; color: var(--butter-t); }
+.load { grid-template-columns: 28px minmax(0, 1fr) 96px 22px; }
+.av-s { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: color-mix(in srgb, var(--u) 40%, var(--card)); color: var(--ink); font-size: .72rem; font-weight: 800; }
+
+/* Scheduled meetings table */
+.tbl-wrap { overflow-x: auto; }
+.tbl { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin-top: -4px; }
+.tbl th { padding: 0 16px 2px; text-align: left; color: var(--ink-soft); font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.tbl td { padding: 13px 16px; border: 0; background: var(--fill); font-size: .9rem; font-weight: 600; white-space: nowrap; }
+.tbl td:first-child { border-radius: 14px 0 0 14px; }
+.tbl td:last-child { border-radius: 0 14px 14px 0; }
+.tbl .mt { display: inline-flex; align-items: center; gap: 8px; }
+.tbl .mt .dot { margin: 0; }
+
+/* Group dropdown */
+.group-wrap { position: relative; }
+.group-menu { position: fixed; z-index: 60; padding: 8px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); box-shadow: 0 14px 34px rgba(23, 38, 54, .16); }
+.gm-title { margin: 4px 10px 6px; color: var(--ink-soft); font-size: .76rem; font-weight: 800; }
+.gm-item { display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 10px; border: 0; border-radius: 12px; background: none; color: var(--ink); font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.gm-item:hover { background: var(--fill); }
+.gm-badge { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 9px; background: var(--sky); color: var(--sky-t); font-size: .8rem; font-weight: 800; }
+.gm-badge.h1 { background: var(--butter); color: var(--butter-t); } .gm-badge.h2 { background: var(--teal); color: var(--teal-t); }
+.gm-badge.h3 { background: var(--blush); color: var(--blush-t); } .gm-badge.h4 { background: var(--lilac); color: var(--lilac-t); }
+.gm-badge.manage { background: var(--fill); color: var(--ink-soft); }
+.gm-badge .ic { width: 16px; height: 16px; }
+.gm-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-check { width: 16px; height: 16px; flex: none; color: var(--teal-d); }
+.gm-sep { height: 1px; margin: 6px 4px; background: var(--line); }
+.gs-chev { transition: transform .15s ease; }
+#group-switch-btn[aria-expanded="true"] .gs-chev { transform: rotate(180deg); }
+
+/* Wider color range: light fill with a dark counterpart ring */
+.color-options { display: flex; flex-wrap: wrap; gap: 8px; max-width: none; }
+.color-option { padding: 7px 14px 7px 8px; }
+.color-swatch { width: 22px; height: 22px; background: color-mix(in srgb, var(--u) 32%, var(--card)); border: 2px solid var(--u); }
+
+/* ===============================================================
+   Top-left toolbar (sidebar toggle + back/forward), like Claude's
+   =============================================================== */
+.topbar { position: fixed; top: 14px; left: 14px; z-index: 45; display: flex; align-items: center; gap: 2px; }
+.tb-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); cursor: pointer; }
+.tb-btn:hover { background: var(--fill); color: var(--ink); }
+.tb-btn .ic { width: 20px; height: 20px; }
+.side { padding-top: 64px; }
+.mini .topbar { left: 21px; }
+.mini .side { padding-top: 72px; }
+@media (max-width: 860px) {
+  .topbar { display: none; }
+  .side, .mini .side { padding-top: 14px; }
 }
-
-function invites() {
-  const rows = [...S.meetings].sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
-  const cal = S.gcals.find((c) => c.id === S.group.gcal_id)?.summary || "your primary calendar";
-  const when = (x) => { const a = new Date(x.starts_at), b = new Date(x.ends_at); return `${a.toLocaleString("en", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} – ${b.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" })}`; };
-  return `<div class="bar"><div><h1>Invites</h1><p class="hint">${S.gtoken ? `Invites are added to ${esc(cal)} and emailed to everyone below.` : "Connect Google Calendar on the Home page to send invites."}</p></div></div>
-  <form class="panel inv" data-form="invite" novalidate>
-    <div class="inv-grid">
-      <label class="field"><span>Title</span><input name="title"></label>
-      <label class="field"><span>Date</span><input name="date" type="date"></label>
-      <label class="field"><span>Start</span><input name="start" type="time"></label>
-      <label class="field"><span>End</span><input name="end" type="time"></label>
-    </div>
-    <label class="field"><span>Description</span><textarea name="description" rows="2"></textarea></label>
-    <label class="field"><span>Emails <small>group members are added for you, one per line</small></span><textarea name="emails" rows="5">${esc(S.members.map((p) => p.email).join("\n"))}</textarea></label>
-    <p id="inv-msg" class="message" role="status" hidden></p>
-    <div class="actions"><button class="btn">Send invites</button></div>
-  </form>
-  <section class="panel"><h2>Scheduled meetings <small>${rows.length}</small></h2>${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Status</th><th>Meeting</th><th>Date &amp; time</th><th>People emailed</th></tr></thead><tbody>${rows.map((x) => `<tr><td><span class="pill p1">Sent</span></td><td><span class="mt"><i class="dot c1"></i>${esc(x.title)}</span></td><td>${esc(when(x))}</td><td title="${esc((x.emails || []).join(", "))}">${(x.emails || []).length} ${(x.emails || []).length === 1 ? "person" : "people"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">No meetings scheduled yet.</p>'}</section>`;
-}
-
-async function sendInvite(f, v) {
-  const say = (t, bad) => { const m = $("inv-msg"); m.textContent = t; m.hidden = !t; m.classList.toggle("is-error", !!bad); };
-  const list = [...new Set(v.emails.split(/[\s,;]+/).filter(Boolean).map((x) => x.toLowerCase()))];
-  const badMail = list.filter((x) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
-  const start = new Date(`${v.date}T${v.start}`), end = new Date(`${v.date}T${v.end}`);
-  const problems = [];
-  if (!v.title.trim()) problems.push("Add a title.");
-  if (!v.date || !v.start || !v.end || isNaN(start) || isNaN(end)) problems.push("Pick a date, start time, and end time.");
-  else if (end <= start) problems.push("The end time must be after the start time.");
-  if (!list.length) problems.push("Add at least one email.");
-  if (badMail.length) problems.push(`Fix these emails: ${badMail.join(", ")}.`);
-  if (!S.gtoken) problems.push("Connect Google Calendar first (on the Home page).");
-  if (problems.length) return say("Not sent. " + problems.join(" "), true);
-  say("Sending invites…");
-  try {
-    const cal = encodeURIComponent(S.group.gcal_id || "primary");
-    const ev = await gapi(`calendars/${cal}/events?sendUpdates=all`, { method: "POST", body: JSON.stringify({ summary: v.title.trim(), description: v.description.trim(), start: { dateTime: start.toISOString() }, end: { dateTime: end.toISOString() }, attendees: list.map((email) => ({ email })) }) });
-    const r = await db.from("meetings").insert({ group_id: S.group.id, title: v.title.trim(), starts_at: start.toISOString(), ends_at: end.toISOString(), description: v.description.trim() || null, emails: list, status: "sent", gcal_event_id: ev.id });
-    if (fail(r)) return;
-    f.reset();
-    await load(true);
-    say(`Invites sent to ${list.length} ${list.length === 1 ? "person" : "people"}.`);
-  } catch (err) { say("Not sent. " + err.message, true); }
-}
-
-function directory() {
-  return `<h1>Directory</h1><p class="hint">Your teammates' profiles and contact details.</p><div class="dir">` + S.members.map((p) => {
-    const mine = p.id === S.user.id;
-    const body = mine
-      ? `<form data-form="profile">${FIELDS.map(([k, l, t, placeholder]) => `<label class="field"><span>${l}</span><input name="${k}" type="${t}" placeholder="${esc(placeholder)}" value="${esc(p[k])}"></label>`).join("")}<button class="btn">Save my info</button></form>`
-      : `<dl>${FIELDS.slice(1).map(([k, l]) => `<dt>${l}</dt><dd>${esc(p[k]) || "—"}</dd>`).join("")}</dl>`;
-    return `<article class="person" style="--u:${safeColor(p.preferred_color)}"><header><span class="p-av">${esc(nm(p).charAt(0).toUpperCase())}</span><span class="p-id"><strong>${esc(p.role || "Member")}</strong><small>${esc(nm(p))}${mine ? " (you)" : ""}</small></span></header><p class="mail">${esc(p.email)}</p>${body}</article>`;
-  }).join("") + `</div>`;
-}
-
-function settings() {
-  const p = meProfile() || {};
-  const color = safeColor(p.preferred_color);
-  return `<div class="settings-page"><h1>Settings</h1><p class="hint">Personalize how you appear to your group.</p>
-  <form class="settings-card" data-form="settings">
-    <section class="set-row"><div class="set-label"><h2>Profile</h2><p>How teammates see you.</p></div>
-      <div class="set-body"><label class="field"><span>Display name</span><input name="full_name" maxlength="80" placeholder="What should everyone call you?" value="${esc(p.full_name || "")}" required></label>
-      <p class="settings-note">Shown on tasks, schedules and the directory. Your email stays the same.</p></div></section>
-    <section class="set-row"><div class="set-label"><h2>Calendar color</h2><p>Your unavailable slots use this color.</p></div>
-      <div class="set-body"><div class="color-options" role="radiogroup" aria-label="Calendar color">${COLORS.map((c) => `<label class="color-option"><input type="radio" name="preferred_color" value="${c.hex}" ${color === c.hex ? "checked" : ""}><span class="color-swatch" style="--u:${c.hex}"></span><span>${c.name}</span></label>`).join("")}</div></div></section>
-    <section class="set-row"><div class="set-label"><h2>Appearance</h2><p>Choose a look for the app.</p></div>
-      <div class="set-body"><div class="theme-options">
-        <label class="theme-tile"><input type="radio" name="theme" value="light" ${p.theme !== "dark" ? "checked" : ""}><span class="theme-preview is-light"></span><span>Light</span></label>
-        <label class="theme-tile"><input type="radio" name="theme" value="dark" ${p.theme === "dark" ? "checked" : ""}><span class="theme-preview is-dark"></span><span>Dark</span></label>
-      </div></div></section>
-    <div class="set-foot"><p id="settings-message" class="settings-feedback" role="status" hidden></p><button class="btn">Save preferences</button></div>
-  </form></div>`;
-}
-
-const onboard = () => `<div class="workspace">
-  <div class="workspace-head"><span class="workspace-mark"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.5"/><path d="M3.5 19c.4-3 2.5-4.7 5.5-4.7s5.1 1.7 5.5 4.7M15 14.6c2.6-.3 4.9 1 5.5 4"/></svg></span>
-    <div><h1>Your workspace</h1><p class="hint">Open one of your groups, or start a new one with your teammates.</p></div></div>
-  <section class="workspace-section"><h2>Your groups <small>${S.groups.length}</small></h2>
-  ${S.groups.length ? `<div class="workspace-list">${S.groups.map((g, i) => `<button type="button" class="workspace-item h${i % 5}" data-pickgroup="${esc(g.id)}"><span class="workspace-badge">${esc(g.name.charAt(0).toUpperCase())}</span><span class="workspace-info"><strong>${esc(g.name)}</strong><small>Invite code: ${esc(g.code)}</small></span>${S.group?.id === g.id ? '<span class="tag p1">Current</span>' : ""}<span class="workspace-go" aria-hidden="true">›</span></button>`).join("")}</div>` : `<p class="empty">You’re not in a group yet. Create one or join with a code below.</p>`}</section>
-  <div class="workspace-actions">
-    <form class="workspace-card" data-form="create"><span class="ws-ic c-sky"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><h2>Create a group</h2><p>Start a fresh space for your team.</p>
-      <label class="field"><span>Group name</span><input name="name" maxlength="100" placeholder="e.g. Thesis team" required></label><button class="btn">Create group</button></form>
-    <form class="workspace-card" data-form="join"><span class="ws-ic c-blush"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8.5" cy="12" r="3.5"/><path d="M12 12h8.5M17 12v3M20.5 12v2"/></svg></span><h2>Join with a code</h2><p>Ask a teammate for their 6-character code.</p>
-      <label class="field"><span>Invite code</span><input name="code" maxlength="6" placeholder="e.g. a1b2c3" autocomplete="off" autocapitalize="off" spellcheck="false" required></label><button class="btn btn-quiet">Join group</button></form>
-  </div></div>`;
-
-/* ---------- actions ---------- */
-$("nav").onclick = (e) => { const b = e.target.closest("[data-go]"); if (b) navigate(b.dataset.go); };
-
-const fail = (r) => r.error && (alert(r.error.message), true);
-
-async function moveTask(id, cid) {
-  const t = S.tasks.find((x) => x.id === id);
-  if (!t || t.column_id === cid) return;
-  t.column_id = cid;
-  draw();
-  if (fail(await db.from("tasks").update({ column_id: cid }).eq("id", id))) load(true);
-}
-
-$("content").onclick = async (e) => {
-  const t = e.target.closest("[data-goto],[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
-  if (!t) return;
-  const ds = t.dataset;
-  if (ds.goto) return navigate(ds.goto);
-  if (ds.pickgroup) {
-    const chosen = S.groups.find((g) => g.id === ds.pickgroup);
-    if (chosen) await selectGroup(chosen);
-  }
-  else if (ds.m) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + +ds.m, 1); draw(); if (S.gtoken) { await gload(); draw(); } }
-  else if (ds.act === "gconnect") gconnect();
-  else if (ds.del) { if (!fail(await db.from("tasks").delete().eq("id", ds.del))) load(true); }
-  else if (ds.addcol !== undefined) {
-    const position = Math.max(-1, ...S.cols.map((c) => c.position)) + 1;
-    if (!fail(await db.from("task_columns").insert({ group_id: S.group.id, name: "New column", position }))) load(true);
-  }
-  else if (ds.delcol) { if (!fail(await db.from("task_columns").delete().eq("id", ds.delcol))) load(true); }
-  else if (ds.act === "clear") { S.mine = new Set(); S.dirty = true; draw(); }
-  else if (ds.act === "save") {
-    const g = S.group.id, uid = S.user.id;
-    let r = await db.from("availability").delete().eq("group_id", g).eq("user_id", uid);
-    if (!r.error && S.mine.size) r = await db.from("availability").insert([...S.mine].map((k) => { const [day, slot] = k.split("-"); return { group_id: g, user_id: uid, day: +day, slot: +slot }; }));
-    if (fail(r)) return;
-    S.dirty = false;
-    await load(true);
-    const b = document.querySelector("[data-act=save]");
-    if (b) b.textContent = "Saved!";
-  }
-};
-
-$("content").onchange = async (e) => {
-  const d = e.target.dataset;
-  if (d.move) return moveTask(d.move, e.target.value);
-  if (d.gcal !== undefined) {
-    const id = e.target.value || null;
-    if (fail(await db.rpc("set_group_calendar", { gid: S.group.id, calendar_id: id }))) return;
-    S.group.gcal_id = id;
-    await gload();
-    return draw();
-  }
-  if (d.rename) {
-    const name = e.target.value.trim();
-    if (name) fail(await db.from("task_columns").update({ name }).eq("id", d.rename));
-    load(true);
-  }
-};
-
-$("content").onkeydown = (e) => { if (e.key === "Enter" && e.target.dataset.rename) e.target.blur(); };
-
-/* drag cards between columns */
-$("content").ondragstart = (e) => {
-  const t = e.target.closest?.(".tcard");
-  if (!t) return;
-  S.dragging = true;
-  e.dataTransfer.setData("text/plain", t.dataset.id);
-  e.dataTransfer.effectAllowed = "move";
-  t.classList.add("dragging");
-};
-$("content").ondragover = (e) => {
-  const col = e.target.closest?.(".col");
-  if (!col || !S.dragging) return;
-  e.preventDefault();
-  document.querySelectorAll(".col.over").forEach((x) => x !== col && x.classList.remove("over"));
-  col.classList.add("over");
-};
-$("content").ondrop = (e) => {
-  const col = e.target.closest?.(".col");
-  if (!col || !S.dragging) return;
-  e.preventDefault();
-  S.dragging = false;
-  moveTask(e.dataTransfer.getData("text/plain"), col.dataset.cid);
-};
-$("content").ondragend = () => {
-  S.dragging = false;
-  document.querySelectorAll(".dragging, .over").forEach((x) => x.classList.remove("dragging", "over"));
-};
-
-/* drag across the schedule grid to paint busy slots */
-let paint = null;
-const myCell = (el) => el?.closest?.(".mg.me .c");
-const paintCell = (c) => {
-  const k = `${c.dataset.d}-${c.dataset.s}`;
-  paint ? S.mine.add(k) : S.mine.delete(k);
-  c.classList.toggle("x", paint);
-  S.dirty = true;
-  const h = $("sv-hint");
-  if (h) h.textContent = "Unsaved changes. Don’t forget to save.";
-};
-$("content").onpointerdown = (e) => {
-  const c = myCell(e.target);
-  if (!c || e.button > 0) return;
-  e.preventDefault();
-  paint = !S.mine.has(`${c.dataset.d}-${c.dataset.s}`);
-  paintCell(c);
-};
-$("content").onpointermove = (e) => {
-  if (paint === null) return;
-  const c = myCell(document.elementFromPoint(e.clientX, e.clientY));
-  if (c) paintCell(c);
-};
-document.addEventListener("pointerup", () => { paint = null; });
-document.addEventListener("pointercancel", () => { paint = null; });
-
-$("content").onsubmit = async (e) => {
-  e.preventDefault();
-  const f = e.target, v = Object.fromEntries(new FormData(f));
-  let r;
-  if (f.dataset.form === "task") r = await db.from("tasks").insert({ group_id: S.group.id, title: v.title.trim(), due: v.due || null, priority: +v.priority, assignee: v.assignee || null, column_id: S.cols[0]?.id });
-  else if (f.dataset.form === "profile") r = await db.from("profiles").update(Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x.trim() || null]))).eq("id", S.user.id);
-  else if (f.dataset.form === "settings") {
-    const button = f.querySelector('button[type="submit"], button.btn');
-    if (button) button.disabled = true;
-    const values = { full_name: (v.full_name || "").trim(), preferred_color: safeColor(v.preferred_color), theme: v.theme === "dark" ? "dark" : "light" };
-    r = await db.from("profiles").update(values).eq("id", S.user.id);
-    if (button) button.disabled = false;
-    if (r.error) return alert("Could not save settings. Run the included settings migration in Supabase first. " + r.error.message);
-    const person = meProfile();
-    if (person) Object.assign(person, values);
-    applyTheme(values.theme);
-    draw();
-    const msg = $("settings-message");
-    if (msg) { msg.textContent = "Preferences saved!"; msg.hidden = false; }
-    return;
-  }
-  else if (f.dataset.form === "create") r = await db.rpc("create_group", { gname: v.name });
-  else if (f.dataset.form === "join") r = await db.rpc("join_group", { gcode: v.code });
-  else if (f.dataset.form === "invite") return sendInvite(f, v);
-  if (r.error) return alert(r.error.message);
-  if (["create", "join"].includes(f.dataset.form)) {
-    const groupId = r.data;
-    await refreshGroups();
-    const target = S.groups.find((g) => g.id === groupId);
-    if (target) return selectGroup(target);
-    return showGroupPicker();
-  }
-  f.reset();
-  load(true);
-};
-
-/* sidebar: full or icons only */
-const shell = $("app-view");
-const setMini = (m) => {
-  shell.classList.toggle("mini", m);
-  $("side-toggle").setAttribute("aria-label", m ? "Expand sidebar" : "Collapse sidebar");
-  try { localStorage.setItem("pm-mini", m ? "1" : "0"); } catch { /* storage unavailable */ }
-};
-try { setMini(localStorage.getItem("pm-mini") === "1"); } catch { setMini(false); }
-window.addEventListener("hashchange", route);
-$("side-toggle").onclick = () => setMini(!shell.classList.contains("mini"));
-
-let ready = false;
-db.auth.onAuthStateChange((_e, session) => {
-  if (!ready || (session?.user?.id || null) !== (S.user?.id || null)) {
-    ready = true;
-    // Avoid doing database calls synchronously inside auth state change.
-    setTimeout(() => boot(session).catch((err) => alert(err.message)), 0);
-  }
-});

@@ -158,12 +158,11 @@ async function selectGroup(group) {
   S.members = []; S.tasks = []; S.busy = []; S.meetings = [];
   S.cols = []; S.mine = new Set(); S.doneIds = new Set(); S.dirty = false;
   S.gevents = []; S.gerr = "";
-  S.view = "home";
+  const r0 = routeOf();
+  S.view = VIEWS.includes(r0) ? r0 : "home";
+  setRoute(S.view, true);
   try { localStorage.setItem(`pm-group-${S.user.id}`, group.id); } catch {}
-  $("nav").hidden = false;
-  $("group-name").textContent = group.name;
-  $("group-badge").textContent = group.name.charAt(0).toUpperCase();
-  $("group-code").textContent = `Invite code: ${group.code}`;
+  showGroupChrome(group);
   await load(true);
   if (S.gtoken) { await gload(); draw(); }
   S.channel = db.channel(`pm-${group.id}`)
@@ -174,13 +173,14 @@ async function selectGroup(group) {
     .subscribe();
 }
 
-function showGroupPicker() {
+function showGroupPicker(push) {
   S.choosingGroup = true;
   $("nav").hidden = true;
   $("group-name").textContent = "Your groups";
   $("group-badge").textContent = "G";
   $("group-code").textContent = "Choose, create or join";
   $("content").innerHTML = onboard();
+  setRoute("workspace", !push);
 }
 
 const gmenu = $("group-menu"), gbtn = $("group-switch-btn");
@@ -205,7 +205,7 @@ gmenu.onclick = async (e) => {
   const t = e.target.closest("[data-switch],[data-manage]");
   if (!t) return;
   closeGroupMenu();
-  if (t.dataset.manage !== undefined) { await refreshGroups(); return showGroupPicker(); }
+  if (t.dataset.manage !== undefined) { await refreshGroups(); return showGroupPicker(true); }
   const g = S.groups.find((x) => x.id === t.dataset.switch);
   if (g && (g.id !== S.group?.id || S.choosingGroup)) await selectGroup(g);
 };
@@ -233,6 +233,34 @@ async function load(force) {
 }
 
 /* ---------- views ---------- */
+/* ---------- routing: browser back/forward work ---------- */
+const VIEWS = ["home", "tasks", "schedule", "invites", "directory", "settings"];
+const routeOf = () => { const v = location.hash.replace(/^#\//, ""); return v === "workspace" || VIEWS.includes(v) ? v : null; };
+function setRoute(v, replace) {
+  const h = `#/${v}`;
+  if (location.hash === h) return;
+  if (replace) history.replaceState(null, "", h);
+  else location.hash = h; // adds a history entry and fires hashchange
+}
+function navigate(view) {
+  if (location.hash === `#/${view}`) { S.view = view; return draw(); }
+  setRoute(view);
+}
+function showGroupChrome(g) {
+  $("nav").hidden = false;
+  $("group-name").textContent = g.name;
+  $("group-badge").textContent = g.name.charAt(0).toUpperCase();
+  $("group-code").textContent = `Invite code: ${g.code}`;
+}
+async function route() {
+  if (!S.user || (!S.group && !S.choosingGroup)) return;
+  const r = routeOf();
+  if (r === "workspace") { if (!S.choosingGroup) { await refreshGroups(); showGroupPicker(); } return; }
+  if (S.choosingGroup) { if (!S.group) return; S.choosingGroup = false; showGroupChrome(S.group); }
+  if (r) S.view = r;
+  draw();
+}
+
 function draw() {
   if (S.choosingGroup) return showGroupPicker();
   document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("is-active", b.dataset.go === S.view));
@@ -495,7 +523,7 @@ const onboard = () => `<div class="workspace">
   </div></div>`;
 
 /* ---------- actions ---------- */
-$("nav").onclick = (e) => { const b = e.target.closest("[data-go]"); if (b) { S.view = b.dataset.go; draw(); } };
+$("nav").onclick = (e) => { const b = e.target.closest("[data-go]"); if (b) navigate(b.dataset.go); };
 
 const fail = (r) => r.error && (alert(r.error.message), true);
 
@@ -511,7 +539,7 @@ $("content").onclick = async (e) => {
   const t = e.target.closest("[data-goto],[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
   if (!t) return;
   const ds = t.dataset;
-  if (ds.goto) { S.view = ds.goto; return draw(); }
+  if (ds.goto) return navigate(ds.goto);
   if (ds.pickgroup) {
     const chosen = S.groups.find((g) => g.id === ds.pickgroup);
     if (chosen) await selectGroup(chosen);
@@ -654,6 +682,7 @@ const setMini = (m) => {
   try { localStorage.setItem("pm-mini", m ? "1" : "0"); } catch { /* storage unavailable */ }
 };
 try { setMini(localStorage.getItem("pm-mini") === "1"); } catch { setMini(false); }
+window.addEventListener("hashchange", route);
 $("side-toggle").onclick = () => setMini(!shell.classList.contains("mini"));
 
 let ready = false;

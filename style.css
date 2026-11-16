@@ -823,3 +823,29 @@ html[data-theme="dark"] .mrow { background: var(--butter); }
 .topbar, .mini .topbar { position:static; inset:auto; left:auto; top:auto; z-index:auto; margin-left:auto; flex:none; }
 .topbar .tb-btn { width:32px; height:32px; border-radius:10px; }
 @media(max-width:860px) { .topbar { display:flex; } }
+
+/* Polished calendar event layout — compact pastels, readable in tight cells. */
+.cal-date { min-width:0; }
+.cal-date .event-chip, .time-cell .event-chip {
+  box-sizing:border-box; width:100%; max-width:100%; min-width:0;
+  margin:3px 0 0; padding:5px 8px;
+  border:0; border-left:3px solid transparent; border-radius:7px;
+  text-align:left; font:inherit; font-size:.72rem; font-weight:750;
+  line-height:1.32; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  box-shadow:none; transition:filter .15s ease;
+}
+.cal-date .event-chip:hover, .time-cell .event-chip:hover { filter:brightness(.96); text-decoration:none; }
+.cal-date .event-chip:focus-visible, .time-cell .event-chip:focus-visible { outline:2px solid var(--sky-d); outline-offset:2px; }
+.cal-date .event-chip.g, .time-cell .event-chip.g { border-left-color:var(--sky-d); }
+.cal-date .event-chip.m, .time-cell .event-chip.m { border-left-color:var(--butter-d); }
+.cal-date .event-chip:not(.g):not(.m), .time-cell .event-chip:not(.g):not(.m) { border-left-color:var(--blush-d); }
+.time-grid[style*="--day-count:7"] { min-width:1100px; }
+.time-cell { min-width:0; flex-direction:column; flex-wrap:nowrap; overflow:hidden; }
+.time-cell .event-chip { white-space:nowrap; padding:5px 7px; }
+.event-actions { margin-top:20px; padding-top:14px; border-top:1px solid var(--line); display:flex; flex-wrap:wrap; gap:9px; }
+.event-actions h3 { flex-basis:100%; font-size:.9rem; margin:0; }
+.event-action-hint { flex-basis:100%; margin:0 0 4px; color:var(--ink-soft); font-size:.8rem; }
+.event-actions .btn { max-width:100%; font-size:.78rem; }
+.meeting-cancel { background:var(--blush); color:var(--blush-t); }
+.meeting-action-status { flex-basis:100%; font-size:.8rem; color:var(--ink-soft); margin:0; }
+@media(max-width:650px) { .event-actions .btn { width:100%; } }

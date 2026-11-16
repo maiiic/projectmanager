@@ -274,7 +274,7 @@ const dayKey = (date) => `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(
 const addDays = (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 const niceTime = (v) => v ? new Date(v).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'}) : '';
 function collectCalendarItems() {
-  const meetings = S.meetings.map(m => ({type:'meeting', title:m.title || 'Meeting', date:dayKey(new Date(m.starts_at)), start:m.starts_at, end:m.ends_at, description:m.description || '', emails:m.emails || [], url:'', location:'', allDay:false}));
+  const meetings = S.meetings.map(m => ({type:'meeting', meetingId:m.id, gcalEventId:m.gcal_event_id || null, title:m.title || 'Meeting', date:dayKey(new Date(m.starts_at)), start:m.starts_at, end:m.ends_at, description:m.description || '', emails:m.emails || [], url:'', location:'', allDay:false}));
   const googleEvents = S.gevents.filter(g => !S.meetings.some(m => m.gcal_event_id && m.gcal_event_id === g.id)).map(g => ({...g, type:'google', date:g.day}));
   const dueTasks = S.tasks.filter(t => t.due && !isDone(t)).map(t => ({type:'task', title:t.title, date:t.due, allDay:true, description:`Priority: ${PR[t.priority] || 'Normal'} · Assigned to: ${who(t)}`, url:''}));
   S.calendarItems = [...meetings, ...googleEvents, ...dueTasks];
@@ -333,7 +333,10 @@ function showEventDetails(index) {
   const attendees=Array.isArray(ev.attendees)&&ev.attendees.length ? ev.attendees.map(a=>a.email||a.displayName).filter(Boolean).join(', ') : Array.isArray(ev.emails)?ev.emails.join(', '):'';
   const meet=typeof ev.meetLink==='string' && /^https:\/\//.test(ev.meetLink)?ev.meetLink:'';
   const link=typeof ev.url==='string' && /^https:\/\//.test(ev.url)?ev.url:'';
-  const detail=`<div class="event-modal-backdrop" data-close-event><section class="event-detail" role="dialog" aria-modal="true" aria-label="Calendar event details"><div class="event-detail-top"><span class="event-type ${ev.type}">${ev.type==='google'?'Google Calendar':ev.type==='meeting'?'Meeting':'Task due date'}</span><button type="button" class="icon" data-close-event aria-label="Close">✕</button></div><h2>${title}</h2><p class="event-info">◷ ${period}</p>${ev.location?`<p class="event-info">⌖ ${esc(ev.location)}</p>`:''}${ev.organizer?`<p class="event-info">Organizer: ${esc(ev.organizer)}</p>`:''}${attendees?`<p class="event-info">Guests: ${esc(attendees)}</p>`:''}${ev.description?`<p class="event-description">${esc(ev.description)}</p>`:''}<div class="event-links">${meet?`<a href="${esc(meet)}" target="_blank" rel="noopener noreferrer">Join Google Meet ↗</a>`:''}${link?`<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Open in Google Calendar ↗</a>`:''}</div></section></div>`;
+  const controls = ev.type === 'meeting' && ev.meetingId
+    ? `<div class="event-actions"><h3>Manage meeting</h3><p class="event-action-hint">Remove only from this site, or cancel in Google Calendar and notify invitees.</p><button type="button" class="btn btn-quiet meeting-action" data-meeting-id="${esc(ev.meetingId)}" data-meeting-action="remove">Remove from site only</button>${ev.gcalEventId ? `<button type="button" class="btn meeting-cancel meeting-action" data-meeting-id="${esc(ev.meetingId)}" data-meeting-action="cancel">Cancel meeting &amp; notify guests</button>` : ''}<p class="meeting-action-status" role="status" hidden></p></div>`
+    : '';
+  const detail=`<div class="event-modal-backdrop" data-close-event><section class="event-detail" role="dialog" aria-modal="true" aria-label="Calendar event details"><div class="event-detail-top"><span class="event-type ${ev.type}">${ev.type==='google'?'Google Calendar':ev.type==='meeting'?'Meeting':'Task due date'}</span><button type="button" class="icon" data-close-event aria-label="Close">✕</button></div><h2>${title}</h2><p class="event-info">◷ ${period}</p>${ev.location?`<p class="event-info">⌖ ${esc(ev.location)}</p>`:''}${ev.organizer?`<p class="event-info">Organizer: ${esc(ev.organizer)}</p>`:''}${attendees?`<p class="event-info">Guests: ${esc(attendees)}</p>`:''}${ev.description?`<p class="event-description">${esc(ev.description)}</p>`:''}<div class="event-links">${meet?`<a href="${esc(meet)}" target="_blank" rel="noopener noreferrer">Join Google Meet ↗</a>`:''}${link?`<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Open in Google Calendar ↗</a>`:''}</div>${controls}</section></div>`;
   document.querySelector('.event-modal-backdrop')?.remove();
   document.body.insertAdjacentHTML('beforeend',detail);
   document.querySelector('[data-close-event].icon')?.focus();
@@ -609,6 +612,31 @@ async function sendInvite(f, v) {
   } catch (err) { say("Not sent. " + err.message, true); }
 }
 
+async function manageMeeting(meetingId, action) {
+  const status = document.querySelector('.meeting-action-status');
+  const buttons = [...document.querySelectorAll('.meeting-action')];
+  const meeting = S.meetings.find(m => String(m.id) === String(meetingId));
+  if (!meeting) return;
+  const cancel = action === 'cancel';
+  if (cancel && !meeting.gcal_event_id) return alert('This meeting has no Google Calendar event to cancel.');
+  const question = cancel
+    ? `Cancel “${meeting.title}” in Google Calendar and send cancellation emails to the guests? This cannot be undone.`
+    : `Remove “${meeting.title}” from the Project Manager only? The Google Calendar event and guest invitations will NOT be canceled. It may still appear as a Google Calendar event.`;
+  if (!confirm(question)) return;
+  buttons.forEach(button => button.disabled = true);
+  if (status) { status.hidden = false; status.textContent = cancel ? 'Canceling and notifying guests…' : 'Removing from site…'; }
+  try {
+    await calendarBackend({action: cancel ? 'cancelMeeting' : 'removeMeeting', meetingId: String(meetingId)});
+    document.querySelector('.event-modal-backdrop')?.remove();
+    await load(true);
+    if (S.gtoken) { await gload(); draw(); }
+    alert(cancel ? 'Meeting canceled. Google Calendar was asked to email all guests.' : 'Meeting removed from Project Manager. Google Calendar was not changed.');
+  } catch (error) {
+    if (status) status.textContent = error.message || 'Unable to update meeting.';
+    buttons.forEach(button => button.disabled = false);
+  }
+}
+
 function directory() {
   return `<h1>Directory</h1><p class="hint">Your teammates' profiles and contact details.</p><div class="dir">` + S.members.map((p) => {
     const mine = p.id === S.user.id;
@@ -827,5 +855,9 @@ db.auth.onAuthStateChange((_e, session) => {
   }
 });
 // Event dialog dismissal, independent of the app content re-render.
-document.addEventListener('click', (e) => {if(e.target.matches('[data-close-event]')) document.querySelector('.event-modal-backdrop')?.remove();});
+document.addEventListener('click', (e) => {
+  const action = e.target.closest('[data-meeting-action]');
+  if (action) { manageMeeting(action.dataset.meetingId, action.dataset.meetingAction); return; }
+  if (e.target.matches('[data-close-event]')) document.querySelector('.event-modal-backdrop')?.remove();
+});
 document.addEventListener('keydown', (e) => {if(e.key==='Escape') document.querySelector('.event-modal-backdrop')?.remove();});

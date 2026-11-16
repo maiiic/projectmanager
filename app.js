@@ -18,7 +18,7 @@ const FIELDS = [
   ["full_name", "Display name", "text", "How teammates should call you"],
   ["id_number", "ID number", "text", "e.g. Student ID"],
   ["address", "Address", "text", "City or address (optional)"],
-  ["contact", "Contact number", "tel", "e.g. +63 912 345 6789"],
+  ["contact", "Contact number", "tel", "e.g. 0912 345 6789"],
   ["discord", "Discord handle", "text", "e.g. username"],
   ["birthday", "Birthday", "date", ""]
 ];

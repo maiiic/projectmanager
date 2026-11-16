@@ -488,7 +488,7 @@ input::placeholder, textarea::placeholder { color: #979b9c; font-weight: 500; op
 .person-schedule-title { justify-content: center; background: color-mix(in srgb, var(--u) 16%, white); color: #394852; padding: 0 5px; }
 .person-schedule-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 76px; }
 .member-indicator { width: 7px; height: 7px; flex: none; border-radius: 50%; }
-.schedule-track .mg { grid-template-columns: 33px repeat(6, var(--s-cell)); width: max-content; gap: 1px; padding: 0 3px 3px; }
+.schedule-track .mg { grid-template-columns: 65px repeat(6, var(--s-cell)); width: max-content; gap: 1px; padding: 0 3px 3px; }
 .schedule-track .mg .c { width: var(--s-cell); min-width: 0; height: var(--s-cell); min-height: 0; aspect-ratio: 1; padding: 0; border: 1px solid #e5e9e6; border-radius: 3px; background: #fff; }
 .schedule-track .mg .c.x { background: var(--u); border-color: var(--u); }
 .schedule-track .mg em { font-size: .5rem; padding-right: 3px; }
@@ -763,4 +763,11 @@ html[data-theme="dark"] .mrow { background: var(--butter); }
     grid-column: 2;
     grid-row: 1;
   }
+}
+
+.schedule-track .mg em {
+  font-size: 0.6rem;
+  white-space: nowrap;
+  text-align: right;
+  padding-right: 6px;
 }

@@ -26,7 +26,7 @@ const COLORS = [
   { name: "Sky", hex: "#4f94dc" }, { name: "Blue", hex: "#3f78d8" }, { name: "Indigo", hex: "#5b5bd6" },
   { name: "Violet", hex: "#9a5bd0" }, { name: "Lilac", hex: "#8878e4" }, { name: "Pink", hex: "#d9609f" },
   { name: "Rose", hex: "#e6708f" }, { name: "Red", hex: "#d6494f" }, { name: "Orange", hex: "#e07f3a" },
-  { name: "Amber", hex: "#d99e2e" }, { name: "Yellow", hex: "#ffeda8" }, { name: "Green", hex: "#4aa75a" },
+  { name: "Amber", hex: "#d99e2e" }, { name: "Yellow", hex: "#ffe58f" }, { name: "Green", hex: "#4aa75a" },
   { name: "Mint", hex: "#19a690" }, { name: "Teal", hex: "#1c9aa8" }, { name: "Slate", hex: "#7286a0" },
 ];
 const safeColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase())?.hex || COLORS[0].hex;

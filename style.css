@@ -752,3 +752,15 @@ html[data-theme="dark"] .mrow { background: var(--butter); }
   .topbar { display: none; }
   .side, .mini .side { padding-top: 14px; }
 }
+
+@media (min-width: 861px) {
+  #app-view.shell > .side {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  #app-view.shell > #content {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}

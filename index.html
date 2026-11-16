@@ -37,15 +37,18 @@
   <div id="app-view" class="shell" hidden>
     <aside class="side">
       <div class="top">
-        <span class="logo"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>
+        <span class="logo"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20v-7"/><path d="M12 13c-4 0-6.5-2.4-6.5-6 4.2 0 6.5 2.4 6.5 6Z"/><path d="M12 11.5c0-3.4 2.2-5.8 6.5-5.8 0 3.6-2.5 5.8-6.5 5.8Z"/></svg></span>
         <span class="lbl brand">Project Manager</span>
         <button type="button" class="icon" id="side-toggle" aria-label="Collapse sidebar" title="Collapse or expand sidebar"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3.5"/><path d="M9.5 4.5v15"/></svg></button>
       </div>
-      <button type="button" id="group-switch-btn" class="group-switch" title="Choose or join another group" aria-label="Choose or join another group">
+      <div class="group-wrap">
+        <button type="button" id="group-switch-btn" class="group-switch" title="Switch group" aria-label="Switch group or manage workspace" aria-haspopup="menu" aria-expanded="false">
         <span class="gs-badge" id="group-badge">P</span>
         <span class="gs-text lbl"><strong id="group-name"></strong><span id="group-code"></span></span>
         <svg class="ic gs-chev lbl" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 9.5 4-4 4 4M8 14.5l4 4 4-4"/></svg>
       </button>
+        <div id="group-menu" class="group-menu" role="menu" hidden></div>
+      </div>
       <nav id="nav">
         <button type="button" data-go="home" title="Home"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/></svg><span class="lbl">Home</span></button>
         <button type="button" data-go="tasks" title="Tasks"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="16" rx="2"/><rect x="13.5" y="4" width="6.5" height="9" rx="2"/></svg><span class="lbl">Tasks</span></button>

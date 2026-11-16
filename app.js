@@ -23,26 +23,13 @@ const FIELDS = [
   ["birthday", "Birthday", "date", ""]
 ];
 const COLORS = [
-  { name: "Sky", hex: "#a9cdeb", dark: "#354f70", legacy: "#4f94dc" },
-  { name: "Baby Blue", hex: "#bfdef2", dark: "#36566b", legacy: "#84bde5" },
-  { name: "Indigo", hex: "#c7cdf4", dark: "#444b7a", legacy: "#8d9de9" },
-  { name: "Violet", hex: "#d8c8f1", dark: "#5b477b", legacy: "#a691e2" },
-  { name: "Lilac", hex: "#ddd3f5", dark: "#574981", legacy: "#8878e4" },
-  { name: "Pink", hex: "#f6cfe3", dark: "#7d4b66", legacy: "#efa1c3" },
-  { name: "Rose", hex: "#f1c0d0", dark: "#854b62", legacy: "#e6708f" },
-  { name: "Red", hex: "#f2c5c4", dark: "#854e52", legacy: "#e88d88" },
-  { name: "Coral", hex: "#f5d3c8", dark: "#855747", legacy: "#eda38c" },
-  { name: "Peach", hex: "#f8ddc9", dark: "#815b45", legacy: "#eab58d" },
-  { name: "Yellow", hex: "#ffeda8", dark: "#73632c", legacy: "#e4bd5a" },
-  { name: "Amber", hex: "#f5dfb5", dark: "#775d33", legacy: "#d99e2e" },
-  { name: "Sage", hex: "#d5e7d4", dark: "#476750", legacy: "#98bea0" },
-  { name: "Green", hex: "#cbe9d3", dark: "#426b50", legacy: "#66b996" },
-  { name: "Mint", hex: "#c2ebe2", dark: "#386c61", legacy: "#19a690" },
-  { name: "Teal", hex: "#c9e8e9", dark: "#416a70", legacy: "#79bec2" },
-  { name: "Slate", hex: "#d5dfeb", dark: "#4b6075", legacy: "#7286a0" }
+  { name: "Sky", hex: "#4f94dc" }, { name: "Blue", hex: "#3f78d8" }, { name: "Indigo", hex: "#5b5bd6" },
+  { name: "Violet", hex: "#9a5bd0" }, { name: "Lilac", hex: "#8878e4" }, { name: "Pink", hex: "#d9609f" },
+  { name: "Rose", hex: "#e6708f" }, { name: "Red", hex: "#d6494f" }, { name: "Orange", hex: "#e07f3a" },
+  { name: "Amber", hex: "#d99e2e" }, { name: "Yellow", hex: "#d4aa00" }, { name: "Green", hex: "#4aa75a" },
+  { name: "Mint", hex: "#19a690" }, { name: "Teal", hex: "#1c9aa8" }, { name: "Slate", hex: "#7286a0" },
 ];
-const darkColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase() || c.legacy === String(v || "").toLowerCase())?.dark || COLORS[0].dark;
-const safeColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase() || c.legacy === String(v || "").toLowerCase())?.hex || COLORS[0].hex;
+const safeColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase())?.hex || COLORS[0].hex;
 const applyTheme = (value) => { document.documentElement.dataset.theme = value === "dark" ? "dark" : "light"; };
 const meProfile = () => S.members.find((p) => p.id === S.user?.id);
 const myTheme = () => meProfile()?.theme || "light";
@@ -188,7 +175,6 @@ async function selectGroup(group) {
 }
 
 function showGroupPicker() {
-  closeGroupMenu();
   S.choosingGroup = true;
   $("nav").hidden = true;
   $("group-name").textContent = "Your groups";
@@ -197,37 +183,34 @@ function showGroupPicker() {
   $("content").innerHTML = onboard();
 }
 
-function closeGroupMenu() {
-  $("group-menu").hidden = true;
-  $("group-switch-btn").setAttribute("aria-expanded", "false");
+const gmenu = $("group-menu"), gbtn = $("group-switch-btn");
+const closeGroupMenu = () => { gmenu.hidden = true; gbtn.setAttribute("aria-expanded", "false"); };
+function openGroupMenu() {
+  const check = '<svg class="ic gm-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+  gmenu.innerHTML = `<p class="gm-title">Switch group</p>${S.groups.map((g, i) => `<button type="button" class="gm-item" role="menuitem" data-switch="${esc(g.id)}"><span class="gm-badge h${i % 5}">${esc(g.name.charAt(0).toUpperCase())}</span><span class="gm-name">${esc(g.name)}</span>${S.group?.id === g.id ? check : ""}</button>`).join("")}
+    <div class="gm-sep"></div><button type="button" class="gm-item" role="menuitem" data-manage><span class="gm-badge manage"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><path d="M16.7 13.5v6.5M13.5 16.7H20"/></svg></span><span class="gm-name">Manage workspace</span></button>`;
+  const r = gbtn.getBoundingClientRect();
+  gmenu.style.left = `${r.left}px`;
+  gmenu.style.top = `${r.bottom + 8}px`;
+  gmenu.style.minWidth = `${Math.max(r.width, 260)}px`;
+  gmenu.hidden = false;
+  gbtn.setAttribute("aria-expanded", "true");
 }
-function renderGroupMenu() {
-  const menu = $("group-menu");
-  menu.innerHTML = `<div class="group-menu-label">Your projects</div>` +
-    S.groups.map((g) => `<button type="button" class="group-menu-item${S.group?.id === g.id ? " is-current" : ""}" role="menuitem" data-menu-group="${esc(g.id)}"><span class="menu-dot"></span><span>${esc(g.name)}</span>${S.group?.id === g.id ? '<span class="menu-check">✓</span>' : ''}</button>`).join("") +
-    `<div class="group-menu-divider"></div><button type="button" role="menuitem" class="group-menu-item manage-item" data-menu-workspace><span aria-hidden="true">⚙</span><span>Manage workspaces</span><span class="workspace-go">›</span></button>`;
-}
-$("group-switch-btn").setAttribute("aria-haspopup", "menu");
-$("group-switch-btn").setAttribute("aria-expanded", "false");
-$("group-switch-btn").onclick = async () => {
-  if (!$("group-menu").hidden) return closeGroupMenu();
+gbtn.onclick = async () => {
+  if (!gmenu.hidden) return closeGroupMenu();
   await refreshGroups();
-  renderGroupMenu();
-  $("group-menu").hidden = false;
-  $("group-switch-btn").setAttribute("aria-expanded", "true");
+  openGroupMenu();
 };
-$("group-menu").onclick = async (event) => {
-  const btn = event.target.closest("[data-menu-group],[data-menu-workspace]");
-  if (!btn) return;
+gmenu.onclick = async (e) => {
+  const t = e.target.closest("[data-switch],[data-manage]");
+  if (!t) return;
   closeGroupMenu();
-  if (btn.hasAttribute("data-menu-workspace")) return showGroupPicker();
-  const selected = S.groups.find(g => g.id === btn.dataset.menuGroup);
-  if (selected && selected.id !== S.group?.id) await selectGroup(selected);
+  if (t.dataset.manage !== undefined) { await refreshGroups(); return showGroupPicker(); }
+  const g = S.groups.find((x) => x.id === t.dataset.switch);
+  if (g && (g.id !== S.group?.id || S.choosingGroup)) await selectGroup(g);
 };
-document.addEventListener("click", event => {
-  if (!event.target.closest("#group-switch-btn, #group-menu")) closeGroupMenu();
-});
-document.addEventListener("keydown", event => { if (event.key === "Escape") closeGroupMenu(); });
+document.addEventListener("click", (e) => { if (!gmenu.hidden && !e.target.closest("#group-menu, #group-switch-btn")) closeGroupMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeGroupMenu(); });
 
 async function load(force) {
   if (!S.group || S.choosingGroup) return;
@@ -270,8 +253,11 @@ function calendar() {
     ];
     h += `<i class="${iso === t0 ? "today" : ""}">${i}${ev.slice(0, 2).map(([a, c]) => `<span class="chip ${c}">${esc(a)}</span>`).join("")}${ev.length > 2 ? `<small>+${ev.length - 2} more</small>` : ""}</i>`;
   }
-  return h + `</div><p class="legend"><span><i class="dot c3"></i>Due dates</span><span><i class="dot c2"></i>Meetings</span><span><i class="dot c0"></i>Google Calendar</span></p>`;
+  return h + `</div><p class="legend"><span><i class="dot c3"></i>Due dates</span><span><i class="dot c1"></i>Meetings</span><span><i class="dot c0"></i>Google Calendar</span></p>`;
 }
+
+const urg = (t) => { const d = left(t); return d < 0 ? "late" : d === 0 ? "today" : d <= 2 ? "soon" : d <= 7 ? "week" : "later"; };
+const goBtn = (view, label) => `<button type="button" class="icon go" data-goto="${view}" aria-label="${label}" title="${label}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></button>`;
 
 function home() {
   const done = S.tasks.filter(isDone);
@@ -281,13 +267,11 @@ function home() {
   const pct = S.tasks.length ? Math.round((done.length / S.tasks.length) * 100) : 0;
   const legend = S.cols.map((c, i) => `<span><i class="dot c${i % 5}"></i>${esc(c.name)} ${S.tasks.filter((t) => t.column_id === c.id).length}</span>`).join("");
   const me = S.members.find((p) => p.id === S.user.id);
-  const load = S.members.map((p) => [nm(p), open.filter((t) => t.assignee === p.id).length]);
+  const load = S.members.map((p) => ({ name: nm(p), n: open.filter((t) => t.assignee === p.id).length, color: safeColor(p.preferred_color) }));
   const unassigned = open.filter((t) => !t.assignee).length;
-  if (unassigned) load.push(["Unassigned", unassigned]);
-  const top = Math.max(1, ...load.map((x) => x[1]));
+  if (unassigned) load.push({ name: "Unassigned", n: unassigned, color: "#7286a0" });
+  const top = Math.max(1, ...load.map((x) => x.n));
   const meets = S.meetings.filter((x) => new Date(x.starts_at) >= new Date()).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)).slice(0, 3);
-  const sectionLink = (destination, label) => `<button type="button" class="section-link" data-jump="${destination}" aria-label="${label}" title="${label}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>`;
-  const urgencyClass = (task) => left(task) < 0 ? "urgency-late" : left(task) === 0 ? "urgency-today" : left(task) <= 3 ? "urgency-soon" : "urgency-normal";
   return `<h1>Hi, ${esc(nm(me))}!</h1><p class="hint">Here’s where the project stands.</p>
   <div class="stats">
     <div class="stat s1"><b>${open.length}</b><span>Open tasks</span></div>
@@ -298,11 +282,11 @@ function home() {
   <section class="panel prog"><h2>Overall progress <small>${done.length} of ${S.tasks.length} tasks done</small></h2>
     <progress max="${Math.max(S.tasks.length, 1)}" value="${done.length}"></progress>
     <p class="legend">${legend}</p></section>
-  <div class="home"><section class="panel home-calendar"><div class="home-calendar-connect">${gbar()}</div>${calendar()}</section>
+  <div class="home"><section class="panel">${gbar()}${calendar()}</section>
   <div class="stack">
-    <aside class="panel dashboard-panel"><h2>Most pressing ${sectionLink("tasks", "Go to tasks")}</h2>${open.slice(0, 5).map((t) => `<button type="button" class="row pressing-row ${urgencyClass(t)}" data-jump="tasks" title="Open tasks"><span class="row-body"><b>${esc(t.title)}</b><small>${esc(who(t))}</small></span><span class="due ${left(t) < 0 ? "late" : ""}">${dueLabel(t)}</span></button>`).join("") || '<p class="empty">Nothing due. Add a task to get started.</p>'}</aside>
-    <aside class="panel dashboard-panel"><h2>Team workload <span class="panel-head-actions"><small>open tasks</small>${sectionLink("tasks", "Go to tasks")}</span></h2>${load.map(([n, c]) => `<button type="button" class="load load-link" data-jump="tasks" title="Open tasks"><span>${esc(n)}</span><progress class="work" max="${top}" value="${c}"></progress><b>${c}</b></button>`).join("")}</aside>
-    <aside class="panel dashboard-panel"><h2>Upcoming meetings ${sectionLink("schedule", "Go to schedule")}</h2>${meets.map((x) => `<button type="button" class="row meeting-row" data-jump="schedule" title="Open schedule"><span class="row-body"><b>${esc(x.title)}</b></span><span class="due">${new Date(x.starts_at).toLocaleString("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></button>`).join("") || '<p class="empty">No meetings scheduled yet.</p>'}</aside>
+    <aside class="panel"><h2>Most pressing ${goBtn("tasks", "Open Tasks")}</h2>${open.slice(0, 5).map((t) => `<div class="row urg-${urg(t)}"><span class="urg-bar"></span><div><b>${esc(t.title)}</b><small>${esc(who(t))}</small></div><span class="due">${dueLabel(t)}</span></div>`).join("") || '<p class="empty">Nothing due. Add a task to get started.</p>'}</aside>
+    <aside class="panel"><h2>Team workload <span class="h2-end"><small>open tasks</small>${goBtn("tasks", "Open Tasks")}</span></h2>${load.map((x) => `<div class="load" style="--u:${x.color}"><span class="av-s">${esc(x.name.charAt(0).toUpperCase())}</span><span>${esc(x.name)}</span><progress class="work" max="${top}" value="${x.n}"></progress><b>${x.n}</b></div>`).join("")}</aside>
+    <aside class="panel"><h2>Upcoming meetings ${goBtn("schedule", "Open Schedule")}</h2>${meets.map((x) => { const d = new Date(x.starts_at); return `<div class="row mrow"><span class="dtile"><b>${d.getDate()}</b><small>${d.toLocaleString("en", { month: "short" })}</small></span><div><b>${esc(x.title)}</b><small>${d.toLocaleString("en", { weekday: "short", hour: "numeric", minute: "2-digit" })}</small></div></div>`; }).join("") || '<p class="empty">No meetings scheduled yet.</p>'}</aside>
   </div></div>`;
 }
 
@@ -368,7 +352,7 @@ function schedule() {
     const me = p.id === S.user.id;
     const set = me ? S.mine : B[p.id] || new Set();
     const color = safeColor(p.preferred_color);
-    let markup = `<section class="person-schedule${me ? " is-mine" : ""}" style="--u:${color};--u-dark:${darkColor(color)}"><div class="person-schedule-title"><span class="member-indicator" style="background:${color}"></span><strong>${esc(nm(p))}${me ? " (you)" : ""}</strong><small>${set.size / 2}h busy</small></div><div class="g mg${me ? " me" : ""}"><span class="mini-time-head"></span>${DAYS.map((d) => `<b>${d}</b>`).join("")}`;
+    let markup = `<section class="person-schedule${me ? " is-mine" : ""}" style="--u:${color}"><div class="person-schedule-title"><span class="member-indicator" style="background:${color}"></span><strong>${esc(nm(p))}${me ? " (you)" : ""}</strong><small>${set.size / 2}h busy</small></div><div class="g mg${me ? " me" : ""}"><span class="mini-time-head"></span>${DAYS.map((d) => `<b>${d}</b>`).join("")}`;
     for (let s = 0; s < SLOTS; s++) {
       markup += `<em>${s % 4 === 0 ? th(s) : ""}</em>`;
       for (let d = 0; d < 6; d++) {
@@ -441,7 +425,7 @@ function invites() {
     <p id="inv-msg" class="message" role="status" hidden></p>
     <div class="actions"><button class="btn">Send invites</button></div>
   </form>
-  <section class="panel meetings-panel"><h2>Scheduled meetings <small>${rows.length}</small></h2>${rows.length ? `<div class="meeting-list">${rows.map((x) => `<article class="meeting-list-item"><div class="meeting-date-mark"><span>${new Date(x.starts_at).toLocaleDateString("en",{month:"short"})}</span><strong>${new Date(x.starts_at).getDate()}</strong></div><div class="meeting-list-info"><strong>${esc(x.title)}</strong><span>${esc(when(x))}</span></div><div class="meeting-list-extra"><span class="pill meeting-status">Sent</span><small>${(x.emails || []).length} ${(x.emails || []).length === 1 ? "person" : "people"} invited</small></div></article>`).join("")}</div>` : '<p class="empty">No meetings scheduled yet.</p>'}</section>`;
+  <section class="panel"><h2>Scheduled meetings <small>${rows.length}</small></h2>${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Status</th><th>Meeting</th><th>Date &amp; time</th><th>People emailed</th></tr></thead><tbody>${rows.map((x) => `<tr><td><span class="pill p1">Sent</span></td><td><span class="mt"><i class="dot c1"></i>${esc(x.title)}</span></td><td>${esc(when(x))}</td><td title="${esc((x.emails || []).join(", "))}">${(x.emails || []).length} ${(x.emails || []).length === 1 ? "person" : "people"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">No meetings scheduled yet.</p>'}</section>`;
 }
 
 async function sendInvite(f, v) {
@@ -475,7 +459,7 @@ function directory() {
     const body = mine
       ? `<form data-form="profile">${FIELDS.map(([k, l, t, placeholder]) => `<label class="field"><span>${l}</span><input name="${k}" type="${t}" placeholder="${esc(placeholder)}" value="${esc(p[k])}"></label>`).join("")}<button class="btn">Save my info</button></form>`
       : `<dl>${FIELDS.slice(1).map(([k, l]) => `<dt>${l}</dt><dd>${esc(p[k]) || "—"}</dd>`).join("")}</dl>`;
-    return `<article class="person" style="--u:${safeColor(p.preferred_color)};--u-dark:${darkColor(safeColor(p.preferred_color))}"><header><span class="p-av">${esc(nm(p).charAt(0).toUpperCase())}</span><span class="p-id"><strong>${esc(p.role || "Member")}</strong><small>${esc(nm(p))}${mine ? " (you)" : ""}</small></span></header><p class="mail">${esc(p.email)}</p>${body}</article>`;
+    return `<article class="person" style="--u:${safeColor(p.preferred_color)}"><header><span class="p-av">${esc(nm(p).charAt(0).toUpperCase())}</span><span class="p-id"><strong>${esc(p.role || "Member")}</strong><small>${esc(nm(p))}${mine ? " (you)" : ""}</small></span></header><p class="mail">${esc(p.email)}</p>${body}</article>`;
   }).join("") + `</div>`;
 }
 
@@ -488,7 +472,7 @@ function settings() {
       <div class="set-body"><label class="field"><span>Display name</span><input name="full_name" maxlength="80" placeholder="What should everyone call you?" value="${esc(p.full_name || "")}" required></label>
       <p class="settings-note">Shown on tasks, schedules and the directory. Your email stays the same.</p></div></section>
     <section class="set-row"><div class="set-label"><h2>Calendar color</h2><p>Your unavailable slots use this color.</p></div>
-      <div class="set-body"><div class="color-options" role="radiogroup" aria-label="Calendar color">${COLORS.map((c) => `<label class="color-option"><input type="radio" name="preferred_color" value="${c.hex}" ${color === c.hex ? "checked" : ""}><span class="color-swatch" style="--u:${c.hex};--u-dark:${c.dark}"></span><span>${c.name}</span></label>`).join("")}</div></div></section>
+      <div class="set-body"><div class="color-options" role="radiogroup" aria-label="Calendar color">${COLORS.map((c) => `<label class="color-option"><input type="radio" name="preferred_color" value="${c.hex}" ${color === c.hex ? "checked" : ""}><span class="color-swatch" style="--u:${c.hex}"></span><span>${c.name}</span></label>`).join("")}</div></div></section>
     <section class="set-row"><div class="set-label"><h2>Appearance</h2><p>Choose a look for the app.</p></div>
       <div class="set-body"><div class="theme-options">
         <label class="theme-tile"><input type="radio" name="theme" value="light" ${p.theme !== "dark" ? "checked" : ""}><span class="theme-preview is-light"></span><span>Light</span></label>
@@ -524,10 +508,10 @@ async function moveTask(id, cid) {
 }
 
 $("content").onclick = async (e) => {
-  const t = e.target.closest("[data-jump],[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
+  const t = e.target.closest("[data-goto],[data-pickgroup],[data-m],[data-del],[data-act],[data-addcol],[data-delcol]");
   if (!t) return;
   const ds = t.dataset;
-  if (ds.jump) { S.view = ds.jump; draw(); return; }
+  if (ds.goto) { S.view = ds.goto; return draw(); }
   if (ds.pickgroup) {
     const chosen = S.groups.find((g) => g.id === ds.pickgroup);
     if (chosen) await selectGroup(chosen);

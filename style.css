@@ -1089,3 +1089,11 @@ html[data-theme="dark"] .time-grid > .time-event.t {
 html[data-theme="dark"] #inv-msg:not(.is-error) {
   background:#563D44; color:#FFD8D7; border-color:#79515A;
 }
+
+.invite-msg.info,
+.invite-msg.success {
+  background: #E4F0FC;
+  color: #245F9A;
+  border: none;
+  box-shadow: none;
+}

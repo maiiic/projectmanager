@@ -165,6 +165,7 @@ async function selectGroup(group) {
   showGroupChrome(group);
   await load(true);
   if (S.gtoken) { await gload(); draw(); }
+  else { await restoreGoogleCalendar(); }
   S.channel = db.channel(`pm-${group.id}`)
     .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `group_id=eq.${group.id}` }, () => load())
     .on("postgres_changes", { event: "*", schema: "public", table: "availability", filter: `group_id=eq.${group.id}` }, () => load())
@@ -452,39 +453,85 @@ function schedule() {
 }
 
 /* ---------- Google Calendar ---------- */
-async function gapi(path, opts = {}) {
-  const r = await fetch("https://www.googleapis.com/calendar/v3/" + path, { ...opts, headers: { Authorization: "Bearer " + S.gtoken, "Content-Type": "application/json" } });
-  if (r.status === 401) { S.gtoken = null; throw new Error("Google session expired. Click Connect Google Calendar again."); }
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error?.message || "Google Calendar error");
-  return j;
+// Google Calendar is proxied through a secure Supabase Edge Function.
+// The browser NEVER receives or stores Google access/refresh tokens.
+async function calendarBackend(payload) {
+  const { data: sessionData, error: sessionError } = await db.auth.getSession();
+  if (sessionError || !sessionData?.session?.access_token) throw new Error("Please sign in again.");
+  const response = await fetch(SUPABASE_URL + "/functions/v1/google-calendar", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: "Bearer " + sessionData.session.access_token
+    },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const err = new Error(result.error || "Google Calendar server error (" + response.status + ")");
+    err.reconnect = !!result.reconnect;
+    throw err;
+  }
+  return result;
 }
 
+async function restoreGoogleCalendar() {
+  if (!S.user) return;
+  try {
+    const result = await calendarBackend({ action: "status" });
+    S.gtoken = result.connected ? "server-connected" : null;
+    if (result.connected && S.group) await gload();
+    else S.gevents = [];
+    S.gerr = "";
+  } catch (error) {
+    S.gerr = "Calendar connection couldn't be checked: " + error.message;
+  }
+  if (S.user && S.group) draw();
+}
+
+async function gapi(path, opts = {}) {
+  try {
+    const result = await calendarBackend({
+      action: "api", path,
+      method: opts.method || "GET",
+      ...(opts.body ? { body: JSON.parse(opts.body) } : {})
+    });
+    return result;
+  } catch (error) {
+    if (error.reconnect) {
+      S.gtoken = null;
+      S.gcals = [];
+      S.gevents = [];
+    }
+    throw error;
+  }
+}
 
 function gconnect() {
-  if (!window.google?.accounts?.oauth2) {
-    alert("Google Calendar is still loading. Try again.");
-    return;
-  }
-
-  const client = google.accounts.oauth2.initTokenClient({
+  if (!window.google?.accounts?.oauth2) return alert("Google sign-in is still loading. Try again in a moment.");
+  const client = google.accounts.oauth2.initCodeClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: GSCOPES,
-    callback: async (response) => {
-      if (response.error) {
-        alert("Google Calendar error: " + response.error);
-        return;
+    ux_mode: "popup",
+    callback: async (result) => {
+      if (result.error || !result.code) return alert("Google authorization failed: " + (result.error || "No authorization code"));
+      try {
+        await calendarBackend({ action: "connect", code: result.code });
+        S.gtoken = "server-connected";
+        S.gcals = [];
+        S.gerr = "";
+        await gload();
+        draw();
+      } catch (error) {
+        S.gerr = error.message;
+        draw();
+        alert("Google Calendar connection failed: " + error.message);
       }
-
-      S.gtoken = response.access_token;
-      S.gerr = "";
-
-      await gload();
-      draw();
-    }
+    },
+    error_callback: (error) => alert("Google Calendar popup failed: " + (error.type || "Please try again."))
   });
-
-  client.requestAccessToken();
+  client.requestCode();
 }
 
 async function gload() {
@@ -513,7 +560,7 @@ function gbar() {
   const opts = S.gcals.map((c) => `<option value="${esc(c.id)}"${c.id === S.group.gcal_id ? " selected" : ""}>${esc(c.summary)}</option>`).join("");
   return `<div class="gbar">${S.gtoken
     ? `<span class="tag p1">Google connected</span><select data-gcal aria-label="Group calendar"><option value="">Pick the group’s calendar</option>${opts}</select>`
-    : `<button type="button" class="btn" data-act="gconnect">Connect Google Calendar</button>`
+    : `<button type="button" class="btn" data-act="gconnect">Connect Google Calendar</button>`}
     ${S.gerr ? `<small class="bad">${esc(S.gerr)}</small>` : ""}</div>`;
 }
 

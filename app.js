@@ -305,16 +305,17 @@ function calendar() {
   } else {
     const dates=mode==='day'?[focus]:Array.from({length:7},(_,i)=>addDays(startOfWeek,i));
     // Include all-day entries before the time grid, and half-hour slots from 8AM–midnight.
-    h += `<div class="time-grid-wrap"><div class="time-grid" style="--day-count:${dates.length}"><span class="time-corner"></span>${dates.map(d=>`<div class="time-day-heading ${dayKey(d)===dayKey(today())?'is-today':''}">${esc(d.toLocaleDateString('en',{weekday:'short',month:'short',day:'numeric'}))}</div>`).join('')}`;
-    h += `<span class="time-label all-day-label">All day</span>${dates.map(d=>{const date=dayKey(d);return `<div class="time-cell all-day-cell">${items.map((ev,i)=>({ev,i})).filter(x=>x.ev.date===date && (x.ev.allDay || !x.ev.start)).map(x=>calChip(x.ev,x.i)).join('')}</div>`}).join('')}`;
+    h += `<div class="time-grid-wrap"><div class="time-grid" style="--day-count:${dates.length}"><span class="time-corner" style="grid-column:1;grid-row:1"></span>${dates.map((d,i)=>`<div style="grid-column:${i+2};grid-row:1" class="time-day-heading ${dayKey(d)===dayKey(today())?'is-today':''}">${esc(d.toLocaleDateString('en',{weekday:'short',month:'short',day:'numeric'}))}</div>`).join('')}`;
+    h += `<span class="time-label all-day-label" style="grid-column:1;grid-row:2">All day</span>${dates.map((d,i)=>{const date=dayKey(d);return `<div class="time-cell all-day-cell" style="grid-column:${i+2};grid-row:2">${items.map((ev,i)=>({ev,i})).filter(x=>x.ev.date===date && (x.ev.allDay || !x.ev.start)).map(x=>calChip(x.ev,x.i)).join('')}</div>`}).join('')}`;
     for(let s=0;s<32;s++) {
       const mins=480+s*30;
       const clock=new Date(2026,0,1,Math.floor(mins/60),mins%60).toLocaleTimeString('en',{hour:'numeric',minute:'2-digit'});
-      h += `<span class="time-label">${clock}</span>`;
-      for(const d of dates) {
+      h += `<span class="time-label" style="grid-column:1;grid-row:${s+3}">${clock}</span>`;
+      for(let dayIndex=0;dayIndex<dates.length;dayIndex++) {
+        const d=dates[dayIndex];
         const date=dayKey(d);
         // Timed events are rendered as grid overlays below, so their height follows their duration.
-        h += `<div class="time-cell" aria-hidden="true"></div>`;
+        h += `<div class="time-cell" style="grid-column:${dayIndex+2};grid-row:${s+3}" aria-hidden="true"></div>`;
       }
     }
     // Each half-hour is a CSS grid row. Place an event across ALL rows it occupies.
@@ -335,7 +336,7 @@ function calendar() {
         const topOffset = (first - startSlot * 30) / 30 * 100;
         const bottomOffset = (endSlot * 30 - last) / 30 * 100;
         const cls = ev.type === 'meeting' ? 'm' : ev.type === 'google' ? 'g' : '';
-        h += `<button type="button" class="chip ${cls} event-chip time-event" data-event="${index}" title="${esc(ev.title)}" style="grid-column:${dayIndex + 2};grid-row:${startSlot + 3} / span ${endSlot - startSlot};--event-top:${topOffset}%;--event-bottom:${bottomOffset}%">${esc(ev.title)}</button>`;
+        h += `<button type="button" class="chip ${cls} event-chip time-event" data-event="${index}" title="${esc(ev.title)}" style="grid-column:${dayIndex + 2};grid-row:${startSlot + 3} / span ${endSlot - startSlot};margin-top:${2 + topOffset * .32}px;margin-bottom:${2 + bottomOffset * .32}px">${esc(ev.title)}</button>`;
       });
     });
     h += `</div></div>`;

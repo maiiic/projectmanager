@@ -903,3 +903,32 @@ html[data-theme="dark"] .mrow { background: var(--butter); }
 .invite-delete-btn .ic { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .invite-delete-btn:hover, .invite-delete-btn:focus-visible { color: #a63b58; border-color: #f3c5d2; background: #fff0f4; }
 .invite-delete-btn:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+
+/* Week/Day grid repair: every label, day and event has a fixed grid cell. */
+.time-grid {
+  grid-template-rows: auto minmax(33px, auto) repeat(32, 32px);
+  grid-auto-flow: row;
+  align-items: stretch;
+}
+.time-grid > .time-cell { min-height: 0; height: 32px; padding: 0; }
+.time-grid > .all-day-cell { height: auto; min-height: 33px; padding: 2px 3px; }
+.time-grid > .time-label:not(.all-day-label) { min-height: 0; height: 32px; }
+.time-grid > .time-event { align-self: stretch; margin-left: 4px; margin-right: 4px; }
+
+/* Softer rose-pink site-created meetings; blue Google events and task colors remain distinct. */
+.cal-date .event-chip.m, .time-grid > .time-event.m, .time-cell .event-chip.m {
+  background: #f8dfe8;
+  color: #85405b;
+  border-left-color: #e4a3b9;
+}
+.cal-date.today .event-chip.m { background: #f5d6e2; }
+html[data-theme="dark"] .cal-date .event-chip.m,
+html[data-theme="dark"] .time-grid > .time-event.m,
+html[data-theme="dark"] .time-cell .event-chip.m {
+  background: #593d4a; color: #ffd8e5; border-left-color: #ce8daa;
+}
+
+/* Informational invite progress/success is blue; errors stay pink/red. */
+#inv-msg:not(.is-error) { background: #e4f0fc; color: #245f9a; border: 1px solid #c8e0f7; }
+html[data-theme="dark"] #inv-msg:not(.is-error) { background: #2d425b; color: #cee5ff; border-color: #486381; }

@@ -1162,7 +1162,7 @@ html[data-theme="dark"] .panel .mrow div small { color:#F0B9BE; }
 .task-jump-highlight { outline:3px solid #9C80D1 !important; outline-offset:3px; box-shadow:0 0 0 6px #EEE9FA; }
 /* Stronger butter-yellow accent, without introducing mustard tones. */
 .board .column-color-trigger[style], .board .column-color-trigger { min-width:14px; min-height:14px; }
-.board .col[style*="--column-edge:#FFDC7A"] { --column-edge:#F7BE3D !important; }
+.board .col[style*="--column-edge:#FFDC7A"] { --column-edge:#FBCB58 !important; }
 .load[style*="--u:#F6C541"] progress.work::-webkit-progress-value { background:#F7C84F; }
 .load[style*="--u:#F6C541"] progress.work::-moz-progress-bar { background:#F7C84F; }
 @media (max-width:520px) { .task-event-fields { grid-template-columns:1fr 1fr; } .task-event-detail { padding:20px; } }

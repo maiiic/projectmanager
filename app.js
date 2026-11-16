@@ -32,7 +32,7 @@ const COLORS = [
 // Shared pastel palette for group Kanban columns (stored in task_columns.color).
 const COLUMN_PASTELS = [
   { name: "Sky", hex: "#e3effb", edge: "#4f94dc" },
-  { name: "Butter", hex: "#fdf1cf", edge: "#c89b2b" },
+  { name: "Butter", hex: "#fdf1cf", edge: "#FFDC7A" },
   { name: "Mint", hex: "#e0f2ee", edge: "#248978" },
   { name: "Blush", hex: "#fbeaf0", edge: "#c76c92" },
   { name: "Lilac", hex: "#eeeafa", edge: "#8878c2" },
@@ -47,6 +47,8 @@ const columnStyle = (column, index = 0) => {
   return `--column-bg:${p.hex};--column-edge:${p.edge}`;
 };
 const safeColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase())?.hex || COLORS[0].hex;
+// Preserve stored profile colors; soften only the displayed yellow accent.
+const displayAccent = (hex) => String(hex).toLowerCase() === "#d4aa00" ? "#F4C84E" : hex;
 const applyTheme = (value) => { document.documentElement.dataset.theme = value === "dark" ? "dark" : "light"; };
 const meProfile = () => S.members.find((p) => p.id === S.user?.id);
 const myTheme = () => meProfile()?.theme || "light";
@@ -387,7 +389,7 @@ function home() {
   const pct = S.tasks.length ? Math.round((done.length / S.tasks.length) * 100) : 0;
   const legend = S.cols.map((c, i) => `<span><i class="dot c${i % 5}"></i>${esc(c.name)} ${S.tasks.filter((t) => t.column_id === c.id).length}</span>`).join("");
   const me = S.members.find((p) => p.id === S.user.id);
-  const load = S.members.map((p) => ({ name: nm(p), n: open.filter((t) => t.assignee === p.id).length, color: safeColor(p.preferred_color) }));
+  const load = S.members.map((p) => ({ name: nm(p), n: open.filter((t) => t.assignee === p.id).length, color: displayAccent(safeColor(p.preferred_color)) }));
   const unassigned = open.filter((t) => !t.assignee).length;
   if (unassigned) load.push({ name: "Unassigned", n: unassigned, color: "#7286a0" });
   const top = Math.max(1, ...load.map((x) => x.n));
@@ -472,7 +474,7 @@ function schedule() {
   const members = ordered.map((p) => {
     const me = p.id === S.user.id;
     const set = me ? S.mine : B[p.id] || new Set();
-    const color = safeColor(p.preferred_color);
+    const color = displayAccent(safeColor(p.preferred_color));
     let markup = `<section class="person-schedule${me ? " is-mine" : ""}" style="--u:${color}"><div class="person-schedule-title"><span class="member-indicator" style="background:${color}"></span><strong>${esc(nm(p))}${me ? " (you)" : ""}</strong><small>${set.size / 2}h busy</small></div><div class="g mg${me ? " me" : ""}"><span class="mini-time-head"></span>${DAYS.map((d) => `<b>${d}</b>`).join("")}`;
     for (let s = 0; s < SLOTS; s++) {
       markup += `<em>${s % 4 === 0 ? th(s) : ""}</em>`;
@@ -694,20 +696,20 @@ function directory() {
     const body = mine
       ? `<form data-form="profile">${FIELDS.map(([k, l, t, placeholder]) => `<label class="field"><span>${l}</span><input name="${k}" type="${t}" placeholder="${esc(placeholder)}" value="${esc(p[k])}"></label>`).join("")}<button class="btn">Save my info</button></form>`
       : `<dl>${FIELDS.slice(1).map(([k, l]) => `<dt>${l}</dt><dd>${esc(p[k]) || "—"}</dd>`).join("")}</dl>`;
-    return `<article class="person" style="--u:${safeColor(p.preferred_color)}"><header><span class="p-av">${esc(nm(p).charAt(0).toUpperCase())}</span><span class="p-id"><strong>${esc(p.role || "Member")}</strong><small>${esc(nm(p))}${mine ? " (you)" : ""}</small></span></header><p class="mail">${esc(p.email)}</p>${body}</article>`;
+    return `<article class="person" style="--u:${displayAccent(safeColor(p.preferred_color))}"><header><span class="p-av">${esc(nm(p).charAt(0).toUpperCase())}</span><span class="p-id"><strong>${esc(p.role || "Member")}</strong><small>${esc(nm(p))}${mine ? " (you)" : ""}</small></span></header><p class="mail">${esc(p.email)}</p>${body}</article>`;
   }).join("") + `</div>`;
 }
 
 function settings() {
   const p = meProfile() || {};
-  const color = safeColor(p.preferred_color);
+  const color = displayAccent(safeColor(p.preferred_color));
   return `<div class="settings-page"><h1>Settings</h1><p class="hint">Personalize how you appear to your group.</p>
   <form class="settings-card" data-form="settings">
     <section class="set-row"><div class="set-label"><h2>Profile</h2><p>How teammates see you.</p></div>
       <div class="set-body"><label class="field"><span>Display name</span><input name="full_name" maxlength="80" placeholder="What should everyone call you?" value="${esc(p.full_name || "")}" required></label>
       <p class="settings-note">Shown on tasks, schedules and the directory. Your email stays the same.</p></div></section>
     <section class="set-row"><div class="set-label"><h2>Calendar color</h2><p>Your unavailable slots use this color.</p></div>
-      <div class="set-body"><div class="color-options" role="radiogroup" aria-label="Calendar color">${COLORS.map((c) => `<label class="color-option"><input type="radio" name="preferred_color" value="${c.hex}" ${color === c.hex ? "checked" : ""}><span class="color-swatch" style="--u:${c.hex}"></span><span>${c.name}</span></label>`).join("")}</div></div></section>
+      <div class="set-body"><div class="color-options" role="radiogroup" aria-label="Calendar color">${COLORS.map((c) => `<label class="color-option"><input type="radio" name="preferred_color" value="${c.hex}" ${color === c.hex ? "checked" : ""}><span class="color-swatch" style="--u:${displayAccent(c.hex)}"></span><span>${c.name}</span></label>`).join("")}</div></div></section>
     <section class="set-row"><div class="set-label"><h2>Appearance</h2><p>Choose a look for the app.</p></div>
       <div class="set-body"><div class="theme-options">
         <label class="theme-tile"><input type="radio" name="theme" value="light" ${p.theme !== "dark" ? "checked" : ""}><span class="theme-preview is-light"></span><span>Light</span></label>

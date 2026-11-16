@@ -1090,10 +1090,58 @@ html[data-theme="dark"] #inv-msg:not(.is-error) {
   background:#563D44; color:#FFD8D7; border-color:#79515A;
 }
 
-.invite-msg.info,
-.invite-msg.success {
-  background: #E4F0FC;
-  color: #245F9A;
-  border: none;
-  box-shadow: none;
+
+/* === Cohesive golden-yellow + peach meeting refinements (Nov 16) ===
+   Keep existing saved profile colors and schedule logic unchanged. */
+:root {
+  --butter: #FFF3D4;
+  --butter-d: #FFDC7A;
+  --butter-t: #785A20;
+  --yellow: #FFEDB8;
 }
+/* The soft butter background stays different from the stronger yellow accent. */
+.c1:not(.legend .dot.c1) { background: var(--butter-d); }
+#nav [data-go="directory"] .ic { color: #E8B846; }
+/* Use the same warm undertone across yellow user swatches, avatars,
+   workload progress, availability markers, and column dots via --u. */
+.load[style*="--u:#F4C84E"] progress.work::-webkit-progress-value {
+  background: #FFDC7A;
+}
+.load[style*="--u:#F4C84E"] progress.work::-moz-progress-bar {
+  background: #FFDC7A;
+}
+.load[style*="--u:#F4C84E"] .av-s {
+  background: #FFE49C;
+}
+/* Make Home upcoming meetings the same peach-pink as calendar meetings,
+   without changing urgency-coded Invites rows or task cards. */
+.home .mrow,
+.panel .mrow {
+  background: #FBE8E5;
+  border-left: 4px solid #E5A0A2;
+  color: #8A4C52;
+  padding-left: 10px;
+}
+.panel .mrow .dtile {
+  background: #FFF7F5;
+  color: #8A4C52;
+}
+.panel .mrow .dtile small {
+  color: #A46669;
+}
+.panel .mrow div small { color: #975F65; }
+/* Dark theme retains legibility for the new semantic shades. */
+html[data-theme="dark"] {
+  --butter: #54472F;
+  --butter-d: #E9BF63;
+  --butter-t: #FBE4A5;
+  --yellow: #574B32;
+}
+html[data-theme="dark"] .panel .mrow {
+  background: #563D44;
+  border-left-color: #E5A0A2;
+  color: #FFD8D7;
+}
+html[data-theme="dark"] .panel .mrow .dtile { background:#43323A; color:#FFD8D7; }
+html[data-theme="dark"] .panel .mrow .dtile small,
+html[data-theme="dark"] .panel .mrow div small { color:#F0B9BE; }

@@ -13,7 +13,24 @@ const pad = (n) => String(n).padStart(2, "0");
 const now = new Date();
 const S = { user: null, groups: [], choosingGroup: false, group: null, members: [], tasks: [], busy: [], meetings: [], mine: new Set(), dirty: false, view: "home", month: new Date(now.getFullYear(), now.getMonth(), 1), sub: false, cols: [], doneIds: new Set(), dragging: false, gtoken: null, gcals: [], gevents: [], gerr: "" };
 const DAYS = ["M", "T", "W", "Th", "F", "S"], SLOTS = 32, PR = ["", "Low", "Medium", "High"];
-const FIELDS = [["role", "Role"], ["full_name", "Full name"], ["id_number", "ID number"], ["address", "Address"], ["contact", "Contact no."], ["discord", "Discord handle"], ["birthday", "Birthday", "date"]];
+const FIELDS = [
+  ["role", "Role", "text", "e.g. Designer, Developer"],
+  ["full_name", "Display name", "text", "How teammates should call you"],
+  ["id_number", "ID number", "text", "e.g. Student ID"],
+  ["address", "Address", "text", "City or address (optional)"],
+  ["contact", "Contact number", "tel", "e.g. +63 912 345 6789"],
+  ["discord", "Discord handle", "text", "e.g. username"],
+  ["birthday", "Birthday", "date", ""]
+];
+const COLORS = [
+  { name: "Sky", hex: "#4f94dc" }, { name: "Rose", hex: "#e6708f" },
+  { name: "Mint", hex: "#19a690" }, { name: "Lilac", hex: "#8878e4" },
+  { name: "Amber", hex: "#d99e2e" }, { name: "Slate", hex: "#7286a0" }
+];
+const safeColor = (v) => COLORS.find((c) => c.hex === String(v || "").toLowerCase())?.hex || COLORS[0].hex;
+const applyTheme = (value) => { document.documentElement.dataset.theme = value === "dark" ? "dark" : "light"; };
+const meProfile = () => S.members.find((p) => p.id === S.user?.id);
+const myTheme = () => meProfile()?.theme || "light";
 
 const nm = (p) => (p ? p.full_name || (p.email || "Member").split("@")[0] : "Unassigned");
 const today = () => new Date(new Date().setHours(0, 0, 0, 0));
@@ -68,21 +85,35 @@ $("auth-form").onsubmit = async (e) => {
 };
 $("signout-btn").onclick = () => db.auth.signOut();
 
-// Supabase Google Sign-In. This is separate from Google Calendar authorization.
-$("google-login-btn").onclick = async () => {
-  const btn = $("google-login-btn");
-  btn.disabled = true;
-  try {
-    const { error } = await db.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: "https://maiiic.github.io/projectmanager/" }
-    });
-    if (error) throw error;
-  } catch (err) {
-    showMessage("Google sign-in failed: " + err.message, true);
-    btn.disabled = false;
-  }
-};
+// Supabase Google Sign-In (separate from Google Calendar permissions).
+// Obtain the provider URL, then navigate explicitly so failures are visible.
+const googleLoginButton = $("google-login-btn");
+if (googleLoginButton) {
+  googleLoginButton.addEventListener("click", async () => {
+    if (googleLoginButton.disabled) return;
+    googleLoginButton.disabled = true;
+    googleLoginButton.dataset.originalLabel ||= googleLoginButton.innerHTML;
+    googleLoginButton.textContent = "Connecting to Google…";
+    showMessage("");
+    try {
+      const { data, error } = await db.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: "https://maiiic.github.io/projectmanager/",
+          skipBrowserRedirect: true
+        }
+      });
+      if (error) throw error;
+      if (!data?.url) throw new Error("Supabase did not return a Google sign-in URL. Check the Google provider settings in Supabase.");
+      window.location.assign(data.url);
+    } catch (err) {
+      console.error("Google login failed:", err);
+      showMessage("Google sign-in failed: " + (err?.message || String(err)), true);
+      googleLoginButton.disabled = false;
+      googleLoginButton.innerHTML = googleLoginButton.dataset.originalLabel;
+    }
+  });
+}
 
 /* ---------- data ---------- */
 async function boot(session) {
@@ -91,6 +122,7 @@ async function boot(session) {
   $("auth-page").hidden = !!S.user;
   $("app-view").hidden = !S.user;
   if (!S.user) {
+    applyTheme("light");
     S.group = null; S.groups = []; S.choosingGroup = false;
     S.gtoken = null; S.gcals = []; S.gevents = [];
     if (S.channel) { await db.removeChannel(S.channel); S.channel = null; }
@@ -164,6 +196,7 @@ async function load(force) {
   const bad = r.find((x) => x.error);
   if (bad) return alert(bad.error.message);
   S.members = r[0].data.map((x) => x.profiles).filter(Boolean);
+  applyTheme(myTheme());
   [S.tasks, S.busy, S.meetings, S.cols] = [r[1].data, r[2].data, r[3].data, r[4].data];
   S.doneIds = new Set(S.cols.filter((c) => c.is_done).map((c) => c.id));
   if (!S.dirty) S.mine = new Set(S.busy.filter((x) => x.user_id === S.user.id).map((x) => `${x.day}-${x.slot}`));
@@ -174,7 +207,7 @@ async function load(force) {
 function draw() {
   if (S.choosingGroup) return showGroupPicker();
   document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("is-active", b.dataset.go === S.view));
-  $("content").innerHTML = { home, tasks, schedule, invites, directory }[S.view]();
+  $("content").innerHTML = { home, tasks, schedule, invites, directory, settings }[S.view]();
 }
 
 function calendar() {
@@ -262,35 +295,46 @@ function bestTimes(B) {
 function schedule() {
   const B = {};
   S.busy.forEach((r) => (B[r.user_id] ??= new Set()).add(`${r.day}-${r.slot}`));
-  const n = S.members.length, hd = DAYS.map((d) => `<b>${d}</b>`).join("");
+  const n = S.members.length;
   const first = (p) => nm(p).split(" ")[0];
   const best = S.busy.length ? bestTimes(B) : [];
-  const label = (free) => free.length === n ? "All" : !free.length ? "" : free.length <= n / 2 ? free.map(first).join(", ") : "All but " + S.members.filter((p) => !free.includes(p)).map(first).join(", ");
-  let ov = `<div class="g ov"><span></span>${FULL.map((d) => `<b>${d.slice(0, 3)}</b>`).join("")}`;
+  const label = (free) => {
+    if (!free.length) return "Nobody";
+    if (free.length === n) return "All";
+    return free.map(first).join(", ");
+  };
+  // Left-side group overview; the same 32 half-hour rows as each mini-calendar.
+  let ov = `<section class="availability-overview"><div class="overview-title">Group availability <small>08:00 AM – 12:00 AM</small></div><div class="g ov"><span class="time-head">TIME</span>${FULL.map((d) => `<b>${d.slice(0, 3)}</b>`).join("")}`;
   for (let s = 0; s < SLOTS; s++) {
     ov += `<em>${tl(s)}</em>`;
     for (let d = 0; d < 6; d++) {
       const free = S.members.filter((p) => !B[p.id]?.has(`${d}-${s}`));
-      ov += `<i class="c ${free.length === n ? "l4" : free.length ? "l2" : "l0"}" title="${esc(free.map(nm).join(", ") || "Nobody free")}">${esc(label(free))}</i>`;
+      const state = free.length === n ? "l4" : free.length ? "l2" : "l0";
+      const names = label(free);
+      ov += `<i class="c ${state}" title="${esc(free.map(nm).join(", ") || "Nobody")}">${esc(names)}</i>`;
     }
   }
-  ov += "</div>";
-  const order = [...S.members].sort((a, b) => (a.id < b.id ? -1 : 1)).map((p) => p.id);
-  const mem = [...S.members].sort((a, b) => (b.id === S.user.id) - (a.id === S.user.id)).map((p, i) => {
-    const me = p.id === S.user.id, set = me ? S.mine : B[p.id] || new Set();
-    let g = `<div class="panel pc u${order.indexOf(p.id) % 5}${me ? " me" : ""}"><div class="g mg${me ? " me" : ""}"><h3><span class="av c${order.indexOf(p.id) % 5}">${esc(nm(p)[0].toUpperCase())}</span>${esc(nm(p))}${me ? " (you)" : ""}<small>${set.size / 2} hrs busy</small></h3><span></span>${hd}`;
+  ov += `</div></section>`;
+  const ordered = [...S.members].sort((a, b) => (b.id === S.user.id) - (a.id === S.user.id));
+  const members = ordered.map((p) => {
+    const me = p.id === S.user.id;
+    const set = me ? S.mine : B[p.id] || new Set();
+    const color = safeColor(p.preferred_color);
+    let markup = `<section class="person-schedule${me ? " is-mine" : ""}" style="--u:${color}"><div class="person-schedule-title"><span class="member-indicator" style="background:${color}"></span><strong>${esc(nm(p))}${me ? " (you)" : ""}</strong><small>${set.size / 2}h busy</small></div><div class="g mg${me ? " me" : ""}"><span class="mini-time-head"></span>${DAYS.map((d) => `<b>${d}</b>`).join("")}`;
     for (let s = 0; s < SLOTS; s++) {
-      g += `<em>${s % 2 ? "" : th(s)}</em>`;
-      for (let d = 0; d < 6; d++) g += `<i class="c${set.has(`${d}-${s}`) ? " x" : ""}"${me ? ` data-d="${d}" data-s="${s}"` : ""}></i>`;
+      markup += `<em>${s % 4 === 0 ? th(s) : ""}</em>`;
+      for (let d = 0; d < 6; d++) {
+        const busy = set.has(`${d}-${s}`);
+        markup += `<i class="c${busy ? " x" : ""}" title="${esc(`${FULL[d]}, ${tl(s)} — ${busy ? "Unavailable" : "Available"}`)}"${me ? ` data-d="${d}" data-s="${s}"` : ""}></i>`;
+      }
     }
-    return g + "</div></div>";
+    return markup + `</div></section>`;
   }).join("");
-  return `<div class="bar"><div><h1>Schedule</h1><p class="hint" id="sv-hint">${S.dirty ? "Unsaved changes. Don’t forget to save." : "Drag across the boxes where you’re busy, then save."}</p></div>
-  <div class="actions"><button type="button" class="btn btn-quiet" data-act="clear">Clear mine</button><button type="button" class="btn" data-act="save">Save availability</button></div></div>
-  <section class="panel best"><h2>Best times to meet <small>everyone free for 1+ hour</small></h2><div class="bests">${best.map((x) => `<span class="tag"><b>${FULL[x.d]}</b> ${tl(x.s)} – ${tl(x.e)} <small>${(x.e - x.s) / 2} hr</small></span>`).join("") || `<p class="empty">${S.busy.length ? "No time works for everyone yet." : "Nobody has saved their availability yet."}</p>`}</div></section>
-  <section class="panel"><h2>Free together <small>names show who is free, hover for the full list</small></h2><div class="hscroll">${ov}</div>
-  <p class="legend"><span><i class="dot l0"></i>Nobody free</span><span><i class="dot l2"></i>Some free</span><span><i class="dot l4"></i>Everyone free</span></p></section>
-  <h2 class="sub">Everyone’s availability</h2><div class="members">${mem}</div>`;
+  return `<div class="schedule-page"><div class="bar schedule-head"><div><h1>Schedule</h1><p class="hint" id="sv-hint">${S.dirty ? "Unsaved changes — save your availability." : "Mark the squares when you're unavailable. Scroll sideways to view everyone."}</p></div>
+    <div class="actions"><button type="button" class="btn btn-quiet" data-act="clear">Clear mine</button><button type="button" class="btn" data-act="save">Save availability</button></div></div>
+    <section class="schedule-best"><strong>Best times to meet</strong><div class="schedule-best-list">${best.map((x) => `<span class="tag"><b>${FULL[x.d]}</b> ${tl(x.s)} – ${tl(x.e)}</span>`).join("") || `<span class="schedule-muted">${S.busy.length ? "No common 1-hour slot yet." : "Save your availability to see suggestions."}</span>`}</div></section>
+    <div class="schedule-legend"><span><i class="dot l4"></i>Everyone free</span><span><i class="dot l2"></i>Some free</span><span><i class="dot l0"></i>Nobody</span><span class="schedule-legend-tip">Your colored squares = unavailable</span></div>
+    <div class="schedule-scroll" role="region" aria-label="Group and individual availability calendars" tabindex="0"><div class="schedule-track">${ov}<div class="member-calendars">${members}</div></div></div></div>`;
 }
 
 /* ---------- Google Calendar ---------- */
@@ -378,13 +422,29 @@ async function sendInvite(f, v) {
 }
 
 function directory() {
-  return `<h1>Directory</h1><div class="dir">` + S.members.map((p) => {
-    const me = p.id === S.user.id;
-    const body = me
-      ? `<form data-form="profile">${FIELDS.map(([k, l, t]) => `<label class="field"><span>${l}</span><input name="${k}" type="${t || "text"}" value="${esc(p[k])}"></label>`).join("")}<button class="btn">Save my info</button></form>`
+  return `<h1>Directory</h1><p class="hint">Your teammates' profiles and contact details.</p><div class="dir">` + S.members.map((p) => {
+    const mine = p.id === S.user.id;
+    const body = mine
+      ? `<form data-form="profile">${FIELDS.map(([k, l, t, placeholder]) => `<label class="field"><span>${l}</span><input name="${k}" type="${t}" placeholder="${esc(placeholder)}" value="${esc(p[k])}"></label>`).join("")}<button class="btn">Save my info</button></form>`
       : `<dl>${FIELDS.slice(1).map(([k, l]) => `<dt>${l}</dt><dd>${esc(p[k]) || "—"}</dd>`).join("")}</dl>`;
-    return `<article class="person"><header>${esc(p.role || "Member")}<small>${esc(nm(p))}${me ? " (you)" : ""}</small></header><p class="mail">${esc(p.email)}</p>${body}</article>`;
-  }).join("") + "</div>";
+    return `<article class="person"><header style="border-left:3px solid ${safeColor(p.preferred_color)}">${esc(p.role || "Member")}<small>${esc(nm(p))}${mine ? " (you)" : ""}</small></header><p class="mail">${esc(p.email)}</p>${body}</article>`;
+  }).join("") + `</div>`;
+}
+
+function settings() {
+  const p = meProfile() || {};
+  const color = safeColor(p.preferred_color);
+  return `<div class="settings-page"><h1>Settings</h1><p class="hint">Personalize how you appear to your group.</p>
+  <form class="panel settings-card" data-form="settings">
+    <h2>Your profile</h2>
+    <label class="field"><span>Display name</span><input name="full_name" maxlength="80" placeholder="What should everyone call you?" value="${esc(p.full_name || "")}" required></label>
+    <p class="settings-note">This name appears on tasks, schedules and the directory. Your Google account and email remain unchanged.</p>
+    <h2>Your calendar color</h2>
+    <div class="color-options" role="radiogroup" aria-label="Calendar color">${COLORS.map((c) => `<label class="color-option"><input type="radio" name="preferred_color" value="${c.hex}" ${color === c.hex ? "checked" : ""}><span class="color-swatch" style="background:${c.hex}"></span><span>${c.name}</span></label>`).join("")}</div>
+    <h2>Appearance</h2>
+    <div class="theme-options"><label><input type="radio" name="theme" value="light" ${p.theme !== "dark" ? "checked" : ""}> Light mode</label><label><input type="radio" name="theme" value="dark" ${p.theme === "dark" ? "checked" : ""}> Dark mode</label></div>
+    <p id="settings-message" class="settings-feedback" role="status" hidden></p><button class="btn">Save preferences</button>
+  </form></div>`;
 }
 
 const onboard = () => `<div class="workspace-head"><h1>Your workspace</h1><p class="hint">Choose a group, create one, or join your teammates with an invite code.</p></div>
@@ -515,6 +575,21 @@ $("content").onsubmit = async (e) => {
   let r;
   if (f.dataset.form === "task") r = await db.from("tasks").insert({ group_id: S.group.id, title: v.title.trim(), due: v.due || null, priority: +v.priority, assignee: v.assignee || null, column_id: S.cols[0]?.id });
   else if (f.dataset.form === "profile") r = await db.from("profiles").update(Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x.trim() || null]))).eq("id", S.user.id);
+  else if (f.dataset.form === "settings") {
+    const button = f.querySelector('button[type="submit"], button.btn');
+    if (button) button.disabled = true;
+    const values = { full_name: (v.full_name || "").trim(), preferred_color: safeColor(v.preferred_color), theme: v.theme === "dark" ? "dark" : "light" };
+    r = await db.from("profiles").update(values).eq("id", S.user.id);
+    if (button) button.disabled = false;
+    if (r.error) return alert("Could not save settings. Run the included settings migration in Supabase first. " + r.error.message);
+    const person = meProfile();
+    if (person) Object.assign(person, values);
+    applyTheme(values.theme);
+    draw();
+    const msg = $("settings-message");
+    if (msg) { msg.textContent = "Preferences saved!"; msg.hidden = false; }
+    return;
+  }
   else if (f.dataset.form === "create") r = await db.rpc("create_group", { gname: v.name });
   else if (f.dataset.form === "join") r = await db.rpc("join_group", { gcode: v.code });
   else if (f.dataset.form === "invite") return sendInvite(f, v);

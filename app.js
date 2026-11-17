@@ -89,7 +89,7 @@ const today = () => new Date(new Date().setHours(0, 0, 0, 0));
 const left = (t) => (t.due ? Math.round((new Date(t.due + "T00:00") - today()) / 864e5) : 9999);
 const urgent = (a, b) => left(a) - left(b) || b.priority - a.priority;
 const dueLabel = (t) => { const d = left(t); return !t.due ? "No date" : d < 0 ? `${-d}d overdue` : d === 0 ? "Due today" : d === 1 ? "Due tomorrow" : `In ${d} days`; };
-const who = (t) => nm(S.members.find((p) => p.id === t.assignee));
+const who = (t) => t.assigned_to_all ? "All members" : nm(S.members.find((p) => p.id === t.assignee));
 const isDone = (t) => S.doneIds.has(t.column_id);
 const FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const tl = (i) => { const m = 480 + 30 * i, h = Math.floor(m / 60) % 24; return `${((h + 11) % 12) + 1}:${m % 60 ? "30" : "00"} ${h < 12 ? "AM" : "PM"}`; };
@@ -422,7 +422,7 @@ function showEventDetails(index) {
     const member = S.members.find(m => m.id === task?.assignee);
     const colIndex = S.cols.findIndex(c => c.id === task?.column_id);
     const pastel = columnPastel(column, colIndex < 0 ? 0 : colIndex);
-    const assigneeAccent = member ? displayAccent(safeColor(member.preferred_color)) : '#85929e';
+    const assigneeAccent = task?.assigned_to_all ? '#8878c2' : (member ? displayAccent(safeColor(member.preferred_color)) : '#85929e');
     const priorityColors = {
       3: { bg: '#FCE8EB', edge: '#D76778', text: '#9C344C' },
       2: { bg: '#FFF3D6', edge: '#FBCB58', text: '#85600D' },
@@ -430,7 +430,7 @@ function showEventDetails(index) {
     };
     const pc = priorityColors[Number(task?.priority ?? ev.priority)] || priorityColors[2];
     const dateIcon = `<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>`;
-    const detail = `<div class="event-modal-backdrop" data-close-event><section class="event-detail task-event-detail" role="dialog" aria-modal="true" aria-label="Task details"><div class="event-detail-top"><span class="event-type task">Task due date</span><button type="button" class="icon" data-close-event aria-label="Close">✕</button></div><h2>${title}</h2><div class="task-event-date"><span class="task-event-icon" aria-hidden="true">${dateIcon}</span><div><small>Due date</small><strong>${esc(due)}</strong></div></div><div class="task-event-fields"><div class="task-detail-field priority-field" style="--field-bg:${pc.bg};--field-edge:${pc.edge};--field-text:${pc.text}"><small>Priority</small><strong>${esc(priority)}</strong></div><div class="task-detail-field assignee-field" style="--field-edge:${assigneeAccent};--field-bg:color-mix(in srgb, ${assigneeAccent} 13%, var(--card));--field-text:var(--ink)"><small>Assigned to</small><strong>${esc(member ? nm(member) : (ev.assigneeName || 'Unassigned'))}</strong></div><div class="task-detail-field status-field" style="--field-bg:${pastel.hex};--field-edge:${pastel.edge};--field-text:var(--ink)"><small>Status</small><strong>${esc(status)}</strong></div></div><div class="task-event-footer"><button type="button" class="btn task-event-open" data-open-task="${esc(ev.taskId)}">View on Tasks <span aria-hidden="true">↗</span></button></div></section></div>`;
+    const detail = `<div class="event-modal-backdrop" data-close-event><section class="event-detail task-event-detail" role="dialog" aria-modal="true" aria-label="Task details"><div class="event-detail-top"><span class="event-type task">Task due date</span><button type="button" class="icon" data-close-event aria-label="Close">✕</button></div><h2>${title}</h2><div class="task-event-date"><span class="task-event-icon" aria-hidden="true">${dateIcon}</span><div><small>Due date</small><strong>${esc(due)}</strong></div></div><div class="task-event-fields"><div class="task-detail-field priority-field" style="--field-bg:${pc.bg};--field-edge:${pc.edge};--field-text:${pc.text}"><small>Priority</small><strong>${esc(priority)}</strong></div><div class="task-detail-field assignee-field" style="--field-edge:${assigneeAccent};--field-bg:color-mix(in srgb, ${assigneeAccent} 13%, var(--card));--field-text:var(--ink)"><small>Assigned to</small><strong>${esc(task?.assigned_to_all ? 'All members' : (member ? nm(member) : (ev.assigneeName || 'Unassigned')))}</strong></div><div class="task-detail-field status-field" style="--field-bg:${pastel.hex};--field-edge:${pastel.edge};--field-text:var(--ink)"><small>Status</small><strong>${esc(status)}</strong></div></div><div class="task-event-footer"><button type="button" class="btn task-event-open" data-open-task="${esc(ev.taskId)}">View on Tasks <span aria-hidden="true">↗</span></button></div></section></div>`;
     document.querySelector('.event-modal-backdrop')?.remove();
     document.body.insertAdjacentHTML('beforeend', detail);
     document.querySelector('[data-close-event].icon')?.focus();
@@ -456,8 +456,8 @@ function home() {
   const pct = S.tasks.length ? Math.round((done.length / S.tasks.length) * 100) : 0;
   const legend = S.cols.map((c, i) => `<span><i class="dot c${i % 5}"></i>${esc(c.name)} ${S.tasks.filter((t) => t.column_id === c.id).length}</span>`).join("");
   const me = S.members.find((p) => p.id === S.user.id);
-  const load = S.members.map((p) => ({ name: nm(p), n: open.filter((t) => t.assignee === p.id).length, color: displayAccent(safeColor(p.preferred_color)) }));
-  const unassigned = open.filter((t) => !t.assignee).length;
+  const load = S.members.map((p) => ({ name: nm(p), n: open.filter((t) => t.assigned_to_all || t.assignee === p.id).length, color: displayAccent(safeColor(p.preferred_color)) }));
+  const unassigned = open.filter((t) => !t.assignee && !t.assigned_to_all).length;
   if (unassigned) load.push({ name: "Unassigned", n: unassigned, color: "#7286a0" });
   const top = Math.max(1, ...load.map((x) => x.n));
   const meets = S.meetings.filter((x) => new Date(x.starts_at) >= new Date()).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)).slice(0, 3);
@@ -488,10 +488,10 @@ const card = (t) => `<article class="tcard urg-${urg(t)}" draggable="true" data-
 function tasks() {
   const opts = S.members.map((p) => `<option value="${p.id}">${esc(nm(p))}</option>`).join("");
   return `<div class="bar"><div><h1>Tasks</h1><p class="hint">Sorted by due date, then priority. Drag cards between columns, or click a column name to rename it.</p></div>
-  <button type="button" class="btn btn-quiet" data-addcol>+ Add column</button></div>
+  <div class="task-heading-actions"><button type="button" class="btn btn-quiet" data-import-tasks>↥ Import tasks</button><button type="button" class="btn btn-quiet" data-addcol>+ Add column</button></div></div>
   <form class="addtask" data-form="task"><input name="title" placeholder="New task" required>
   <input name="due" type="date" aria-label="Due date"><select name="priority" aria-label="Priority"><option value="3">High</option><option value="2" selected>Medium</option><option value="1">Low</option></select>
-  <select name="assignee" aria-label="Assignee"><option value="">Unassigned</option>${opts}</select><button class="btn">Add task</button></form>
+  <select name="assignee" aria-label="Assignee"><option value="">Unassigned</option><option value="__ALL__">All members</option>${opts}</select><button class="btn">Add task</button></form>
   <div class="board">` + S.cols.map((c, i) => {
     const list = S.tasks.filter((t) => t.column_id === c.id || (!t.column_id && i === 0)).sort(urgent);
     const palette = COLUMN_PASTELS.map(p => `<button type="button" class="column-color-swatch ${columnPastel(c,i).hex===p.hex?'selected':''}" data-column-color="${c.id}" data-pastel="${p.hex}" title="${p.name}" aria-label="Set ${esc(c.name)} to ${p.name}" aria-pressed="${columnPastel(c,i).hex===p.hex}" style="--swatch:${p.hex};--swatch-edge:${p.edge}"></button>`).join('');
@@ -970,7 +970,7 @@ $("content").onsubmit = async (e) => {
   e.preventDefault();
   const f = e.target, v = Object.fromEntries(new FormData(f));
   let r;
-  if (f.dataset.form === "task") r = await db.from("tasks").insert({ group_id: S.group.id, title: v.title.trim(), due: v.due || null, priority: +v.priority, assignee: v.assignee || null, column_id: S.cols[0]?.id });
+  if (f.dataset.form === "task") r = await db.from("tasks").insert({ group_id: S.group.id, title: v.title.trim(), due: v.due || null, priority: +v.priority, assignee: v.assignee === "__ALL__" ? null : (v.assignee || null), assigned_to_all: v.assignee === "__ALL__", column_id: S.cols[0]?.id });
   else if (f.dataset.form === "profile") r = await db.from("profiles").update(Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x.trim() || null]))).eq("id", S.user.id);
   else if (f.dataset.form === "settings") {
     const button = f.querySelector('button[type="submit"], button.btn');
@@ -1042,3 +1042,193 @@ document.addEventListener('click', (e) => {
   if (e.target.matches('[data-close-event]')) document.querySelector('.event-modal-backdrop')?.remove();
 });
 document.addEventListener('keydown', (e) => {if(e.key==='Escape') document.querySelector('.event-modal-backdrop')?.remove();});
+
+
+/* ---------- Import tasks: PDF / screenshot / paste, then review before saving ---------- */
+const taskImportState = { rows: [], busy: false };
+const taskImportEscape = (v) => esc(v);
+const importDate = (v) => {
+  const text = String(v || '').trim();
+  if (!text) return '';
+  let m = text.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+  if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  m = text.match(/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2}),?\s+(20\d{2})/i);
+  if (m) { const d = new Date(`${m[0]}`); if (!Number.isNaN(+d)) return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+  m = text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})\b/);
+  if (m) return `${m[3]}-${pad(m[1])}-${pad(m[2])}`;
+  return '';
+};
+const memberFromText = (text) => {
+  const v = String(text || '').toLowerCase().trim();
+  if (!v) return '';
+  if (/\b(all|everyone|whole team|entire team)\b/.test(v)) return '__ALL__';
+  const matches = S.members.filter(p => nm(p).toLowerCase() === v || nm(p).toLowerCase().split(/\s+/)[0] === v || (p.email || '').toLowerCase() === v);
+  return matches.length === 1 ? matches[0].id : '';
+};
+function taskImportModal() {
+  document.getElementById('task-import-overlay')?.remove();
+  if (!S.group || !S.cols.length) return alert('Choose a workspace with a task column first.');
+  taskImportState.rows = [];
+  const el = document.createElement('div');
+  el.id = 'task-import-overlay';
+  el.className = 'import-overlay';
+  el.innerHTML = `<section class="import-dialog" role="dialog" aria-modal="true" aria-label="Import tasks">
+    <div class="import-heading"><div><span class="import-kicker">TASK IMPORT</span><h2>Import tasks from a table</h2><p>Upload a PDF or image, paste a screenshot, or paste table text. Review everything before adding it to your group.</p></div><button type="button" class="icon" data-import-close aria-label="Close">✕</button></div>
+    <div class="import-upload" tabindex="0" role="button" aria-label="Choose a PDF or image"><strong>Choose a file or paste a screenshot</strong><small>PDF, PNG, JPG, WEBP, CSV, TSV, or TXT · Cmd/Ctrl + V works while this window is open</small><input id="task-import-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,application/pdf,image/*,text/plain,text/csv" hidden></div>
+    <label class="import-text-label">Or paste table text <textarea id="task-import-text" rows="3" placeholder="Paste rows copied from a spreadsheet or a table, then click Extract tasks..."></textarea></label>
+    <div class="import-toolbar"><button class="btn btn-quiet" type="button" data-import-extract>Extract from pasted text</button><span id="task-import-status" role="status">Nothing imported yet</span></div>
+    <div class="import-review" id="task-import-review" hidden><div class="import-review-title"><strong>Review tasks <span id="task-import-count"></span></strong><button type="button" class="btn btn-quiet" data-import-addrow>+ Add row</button></div><p class="import-help">Extraction is best-effort, especially for screenshots and merged cells. Check every title, assignee, and due date. Duplicate tasks are not automatically removed.</p><div class="import-table-scroll"><table class="import-table"><thead><tr><th>Import</th><th>Task title</th><th>Due date</th><th>Assigned to</th><th>Priority</th><th>Status</th><th></th></tr></thead><tbody id="task-import-rows"></tbody></table></div></div>
+    <div class="import-footer"><button type="button" class="btn btn-quiet" data-import-close>Cancel</button><button type="button" class="btn" data-import-save disabled>Import selected tasks</button></div>
+  </section>`;
+  document.body.append(el);
+  el.querySelector('.import-upload').addEventListener('click', e=>{ if(e.target.id !== 'task-import-file') el.querySelector('#task-import-file').click(); });
+  el.querySelector('.import-upload').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.querySelector('#task-import-file').click(); } });
+  el.querySelector('#task-import-file').addEventListener('change', async e => { const file=e.target.files?.[0]; if(file) await readImportFile(file); });
+  el.querySelector('#task-import-text').focus();
+}
+function taskImportStatus(message) { const el=document.getElementById('task-import-status'); if(el) el.textContent=message; }
+function taskImportBusy(value) {
+  taskImportState.busy=value;
+  const dlg=document.getElementById('task-import-overlay');
+  if(dlg) dlg.querySelectorAll('[data-import-save],[data-import-extract],#task-import-file').forEach(x=>x.disabled=value);
+  if(!value) { const b=dlg?.querySelector('[data-import-save]'); if(b) b.disabled=!taskImportState.rows.length; }
+}
+function taskImportSelect(name, value, options) { return `<select data-import-field="${name}">${options.map(o=>`<option value="${esc(o.value)}" ${String(o.value)===String(value)?'selected':''}>${esc(o.label)}</option>`).join('')}</select>`; }
+function taskImportRender() {
+  const dlg=document.getElementById('task-import-overlay'); if(!dlg) return;
+  dlg.querySelector('#task-import-review').hidden=false;
+  dlg.querySelector('#task-import-count').textContent=`(${taskImportState.rows.length})`;
+  const members=[{value:'',label:'Unassigned'},{value:'__ALL__',label:'All members'},...S.members.map(p=>({value:p.id,label:nm(p)}))];
+  const priorities=[{value:1,label:'Low'},{value:2,label:'Medium'},{value:3,label:'High'}];
+  const cols=S.cols.map(c=>({value:c.id,label:c.name}));
+  dlg.querySelector('#task-import-rows').innerHTML=taskImportState.rows.map((r,i)=>`<tr data-import-index="${i}"><td><input type="checkbox" data-import-field="checked" ${r.checked?'checked':''} aria-label="Include row ${i+1}"></td><td><input class="import-task-title" data-import-field="title" value="${esc(r.title)}" aria-label="Task title ${i+1}"></td><td><input type="date" data-import-field="due" value="${esc(r.due)}" aria-label="Due date ${i+1}"></td><td>${taskImportSelect('assignee',r.assignee,members)}</td><td>${taskImportSelect('priority',r.priority,priorities)}</td><td>${taskImportSelect('column_id',r.column_id,cols)}</td><td><button class="icon" type="button" data-import-remove="${i}" title="Remove row" aria-label="Remove row ${i+1}">✕</button></td></tr>`).join('');
+  dlg.querySelector('[data-import-save]').disabled=!taskImportState.rows.length || taskImportState.busy;
+}
+function taskImportMakeRow(title='', due='', assignee='', priority=2) { return {title:String(title).trim(),due,assignee,priority,column_id:S.cols[0]?.id,checked:true}; }
+function taskImportParse(text) {
+  const lines=String(text).replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
+  const out=[];
+  let parent='';
+  let header=false;
+  for(const line of lines) {
+    if (/^(task|subtask|member|proofread|idl|deadline|due date)(\s|$)/i.test(line) && /task|member|date/i.test(line)) {header=true;continue;}
+    if (/^\d+$/.test(line) || /^(👍\s*\d+|proofread|member|idl)$/i.test(line)) continue;
+    const parts=line.split(/\t|\s{3,}|\s*\|\s*/).map(x=>x.trim()).filter(Boolean);
+    if(!parts.length) continue;
+    const date=importDate(line);
+    const mem=parts.map(memberFromText).find(Boolean) || '';
+    let title=parts[0];
+    if (parts.length>1) {
+      const filtered=parts.filter(x => !importDate(x) && !memberFromText(x) && !/^(\d+|👍\s*\d+)$/.test(x));
+      title=filtered[filtered.length>1?1:0] || title;
+      if(filtered.length>1 && filtered[0].length>3) parent=filtered[0];
+    }
+    if (!date && !mem && parts.length===1 && line.length<85 && !/\b(20\d{2})\b/.test(line)) {
+      // Standalone table section / parent heading, or an undated task.
+      if (/^(work breakdown|project organization|schedule|design|testing|implementation|documentation|research)/i.test(line)) { parent=line; continue; }
+    }
+    title=title.replace(/\s*👍\s*\d+\s*$/,'').trim();
+    if (!title || /^(task|subtask|member|idl|proofread)$/i.test(title) || /^\d{1,2}\/\d{1,2}\/20\d{2}$/.test(title)) continue;
+    if (/^\d{1,3}$/.test(title)) continue;
+    if (parent && title!==parent && !title.toLowerCase().startsWith(parent.toLowerCase())) title=`${parent} — ${title}`;
+    out.push(taskImportMakeRow(title,date,mem));
+  }
+  return out.slice(0,150);
+}
+async function taskImportScript(url, name) {
+  if(window[name]) return;
+  await new Promise((resolve,reject)=>{
+    const s=document.createElement('script');s.src=url;s.onload=resolve;s.onerror=()=>reject(Error(`Could not load ${name}. Check internet access.`));document.head.appendChild(s);
+  });
+}
+async function taskImportOcr(image) {
+  await taskImportScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js','Tesseract');
+  const r=await Tesseract.recognize(image,'eng');
+  return r.data.text || '';
+}
+async function taskImportPdf(file) {
+  await taskImportScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js','pdfjsLib');
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+  const text=[];
+  for(let i=1;i<=Math.min(pdf.numPages,8);i++) {
+    taskImportStatus(`Reading page ${i} of ${Math.min(pdf.numPages,8)}…`);
+    const page=await pdf.getPage(i), content=await page.getTextContent();
+    const groups=new Map();
+    for(const item of content.items) { const y=Math.round(item.transform[5]/5)*5; if(!groups.has(y))groups.set(y,[]);groups.get(y).push(item); }
+    let pageText=[...groups.entries()].sort((a,b)=>b[0]-a[0]).map(([,items])=>items.sort((a,b)=>a.transform[4]-b.transform[4]).map(x=>x.str).join('   ')).join('\n');
+    if(pageText.replace(/\s/g,'').length<30) {
+      const viewport=page.getViewport({scale:2});const canvas=document.createElement('canvas');canvas.width=viewport.width;canvas.height=viewport.height;
+      await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+      taskImportStatus(`Reading scanned page ${i} with OCR…`);
+      pageText=await taskImportOcr(canvas);
+    }
+    text.push(pageText);
+  }
+  if(pdf.numPages>8) taskImportStatus('Only the first 8 pages were read.');
+  return text.join('\n');
+}
+async function readImportFile(file) {
+  if(taskImportState.busy)return;
+  const max=15*1024*1024;
+  if(file.size>max) return taskImportStatus('File is too large (max 15 MB).');
+  taskImportBusy(true);
+  taskImportStatus(`Reading ${file.name || 'pasted image'}…`);
+  try {
+    let raw='';
+    if(file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name)) raw=await taskImportOcr(file);
+    else if(file.type==='application/pdf' || /\.pdf$/i.test(file.name)) raw=await taskImportPdf(file);
+    else if(/\.(csv|tsv|txt)$/i.test(file.name) || file.type.startsWith('text/')) raw=await file.text();
+    else throw Error('Supported formats: PDF, PNG, JPG, WEBP, CSV, TSV, TXT.');
+    document.getElementById('task-import-text').value=raw;
+    taskImportState.rows=taskImportParse(raw);
+    taskImportRender();
+    taskImportStatus(taskImportState.rows.length?`Extracted ${taskImportState.rows.length} possible tasks. Review/edit before importing.`:'No task rows detected. Try pasting table text or use + Add row.');
+  } catch(err) {taskImportStatus(`Import failed: ${err.message}`);}
+  finally {taskImportBusy(false);}
+}
+async function taskImportSave() {
+  if(taskImportState.busy || !S.group)return;
+  const selected=taskImportState.rows.filter(r=>r.checked && r.title.trim());
+  if(!selected.length)return taskImportStatus('Select at least one task with a title.');
+  if(selected.length>150)return taskImportStatus('Please import at most 150 tasks at once.');
+  if(!confirm(`Add ${selected.length} tasks to ${S.group.name}? Everyone in the group will see them.`))return;
+  const payload=selected.map(r=>({group_id:S.group.id,title:r.title.trim(),due:r.due||null,priority:+r.priority,assignee:r.assignee && r.assignee!=='__ALL__'?r.assignee:null,assigned_to_all:r.assignee==='__ALL__',column_id:r.column_id||S.cols[0]?.id}));
+  taskImportBusy(true);taskImportStatus('Saving tasks to your shared workspace…');
+  let saved=0;
+  for(let i=0;i<payload.length;i+=30) {
+    const result=await db.from('tasks').insert(payload.slice(i,i+30));
+    if(result.error) {taskImportStatus(`Saved ${saved}, then stopped: ${result.error.message}`);taskImportBusy(false);await load(true);return;}
+    saved+=Math.min(30,payload.length-i);
+  }
+  document.getElementById('task-import-overlay')?.remove();
+  await load(true);
+  alert(`Imported ${saved} tasks to your shared workspace.`);
+}
+document.addEventListener('click',async e=>{
+  if(e.target.closest('[data-import-tasks]'))return taskImportModal();
+  const overlay=document.getElementById('task-import-overlay');if(!overlay)return;
+  if(e.target===overlay || e.target.closest('[data-import-close]')) {if(!taskImportState.busy)overlay.remove();return;}
+  if(e.target.closest('[data-import-extract]')) {
+    taskImportState.rows=taskImportParse(overlay.querySelector('#task-import-text').value);
+    taskImportRender();taskImportStatus(`Found ${taskImportState.rows.length} possible tasks. Verify each row.`);return;
+  }
+  if(e.target.closest('[data-import-addrow]')) {taskImportState.rows.push(taskImportMakeRow());taskImportRender();return;}
+  const remove=e.target.closest('[data-import-remove]');if(remove){taskImportState.rows.splice(+remove.dataset.importRemove,1);taskImportRender();return;}
+  if(e.target.closest('[data-import-save]')) await taskImportSave();
+});
+document.addEventListener('change',e=>{
+  const el=e.target.closest?.('[data-import-field]');if(!el)return;
+  const i=Number(el.closest('tr')?.dataset.importIndex);const r=taskImportState.rows[i];if(!r)return;
+  r[el.dataset.importField]=el.type==='checkbox'?el.checked:el.dataset.importField==='priority'?Number(el.value):el.value;
+});
+document.addEventListener('input',e=>{
+  const el=e.target.closest?.('[data-import-field="title"]');if(!el)return;
+  const i=Number(el.closest('tr')?.dataset.importIndex);if(taskImportState.rows[i])taskImportState.rows[i].title=el.value;
+});
+document.addEventListener('paste',async e=>{
+  if(!document.getElementById('task-import-overlay'))return;
+  const files=[...(e.clipboardData?.items||[])].filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);
+  if(files.length){e.preventDefault();await readImportFile(files[0]);}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape' && !taskImportState.busy)document.getElementById('task-import-overlay')?.remove();});

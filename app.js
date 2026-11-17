@@ -1077,7 +1077,7 @@ function taskImportModal() {
     <div class="import-upload" tabindex="0" role="button" aria-label="Choose a PDF or image"><strong>Choose a file or paste a screenshot</strong><small>PDF, PNG, JPG, WEBP, CSV, TSV, or TXT · Cmd/Ctrl + V works while this window is open</small><input id="task-import-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,application/pdf,image/*,text/plain,text/csv" hidden></div>
     <label class="import-text-label">Or paste table text <textarea id="task-import-text" rows="3" placeholder="Paste rows copied from a spreadsheet or a table, then click Extract tasks..."></textarea></label>
     <div class="import-toolbar"><button class="btn btn-import-extract" type="button" data-import-extract>Extract from pasted text</button><span id="task-import-status" role="status">Nothing imported yet</span></div>
-    <div class="import-review" id="task-import-review" hidden><div class="import-review-title"><strong>Review tasks <span id="task-import-count"></span></strong><button type="button" class="btn btn-quiet" data-import-addrow>+ Add row</button></div><p class="import-help">Extraction is best-effort, especially for screenshots and merged cells. Check every title, assignee, and due date. Duplicate tasks are not automatically removed.</p><div class="import-table-scroll"><table class="import-table"><thead><tr><th>Import</th><th>Task title</th><th>Due date</th><th>Assigned to</th><th>Priority</th><th>Status</th><th></th></tr></thead><tbody id="task-import-rows"></tbody></table></div></div>
+    <div class="import-review" id="task-import-review" hidden><div class="import-review-title"><strong>Review tasks <span id="task-import-count"></span></strong><button type="button" class="btn btn-quiet" data-import-addrow>+ Add row</button></div><p class="import-help">Each subtask becomes one task, prefixed with its parent heading. Please review OCR mistakes, names, and dates before saving. Unmatched member names are highlighted; tasks are never assigned to someone else automatically.</p><div class="import-table-scroll"><table class="import-table"><thead><tr><th>Import</th><th>Task title</th><th>Due date</th><th>Assigned to</th><th>Priority</th><th>Status</th><th></th></tr></thead><tbody id="task-import-rows"></tbody></table></div></div>
     <div class="import-footer"><button type="button" class="btn btn-quiet" data-import-close>Cancel</button><button type="button" class="btn" data-import-save disabled>Import selected tasks</button></div>
   </section>`;
   document.body.append(el);
@@ -1108,168 +1108,180 @@ function taskImportRender() {
   const members=[{value:'',label:'Unassigned'},{value:'__ALL__',label:'All members'},...S.members.map(p=>({value:p.id,label:nm(p)}))];
   const priorities=[{value:1,label:'Low'},{value:2,label:'Medium'},{value:3,label:'High'}];
   const cols=S.cols.map(c=>({value:c.id,label:c.name}));
-  dlg.querySelector('#task-import-rows').innerHTML=taskImportState.rows.map((r,i)=>`<tr data-import-index="${i}"><td><input type="checkbox" data-import-field="checked" ${r.checked?'checked':''} aria-label="Include row ${i+1}"></td><td><input class="import-task-title" data-import-field="title" value="${esc(r.title)}" aria-label="Task title ${i+1}"></td><td><input type="date" data-import-field="due" value="${esc(r.due)}" aria-label="Due date ${i+1}"></td><td>${taskImportSelect('assignee',r.assignee,members)}</td><td>${taskImportSelect('priority',r.priority,priorities)}</td><td>${taskImportSelect('column_id',r.column_id,cols)}</td><td><button class="icon" type="button" data-import-remove="${i}" title="Remove row" aria-label="Remove row ${i+1}">✕</button></td></tr>`).join('');
+  dlg.querySelector('#task-import-rows').innerHTML=taskImportState.rows.map((r,i)=>{
+    const unmatched=r.assigneeName && !r.assignee;
+    const needsDate=!r.due;
+    const assigneeOptions=unmatched?[{value:'',label:`⚠ ${r.assigneeName} — choose member`},...members.filter(m=>m.value!=='')]:members;
+    const flags=[unmatched?`<small class="import-review-warning">Name from source: ${esc(r.assigneeName)} (not matched to a workspace member)</small>`:'',needsDate?'<small class="import-review-warning">Check due date</small>':''].join('');
+    return `<tr data-import-index="${i}" class="${unmatched||needsDate?'import-review-uncertain':''}"><td><input type="checkbox" data-import-field="checked" ${r.checked?'checked':''} aria-label="Include row ${i+1}"></td><td><input class="import-task-title" data-import-field="title" value="${esc(r.title)}" aria-label="Task title ${i+1}">${flags}</td><td><input type="date" data-import-field="due" value="${esc(r.due)}" aria-label="Due date ${i+1}"></td><td>${taskImportSelect('assignee',r.assignee,assigneeOptions)}</td><td>${taskImportSelect('priority',r.priority,priorities)}</td><td>${taskImportSelect('column_id',r.column_id,cols)}</td><td><button class="icon" type="button" data-import-remove="${i}" title="Remove row" aria-label="Remove row ${i+1}">✕</button></td></tr>`;
+  }).join('');
   dlg.querySelector('[data-import-save]').disabled=!taskImportState.rows.length || taskImportState.busy;
 }
-function taskImportMakeRow(title='', due='', assignee='', priority=2) { return {title:String(title).trim(),due,assignee,priority,column_id:S.cols[0]?.id,checked:true}; }
+function taskImportMakeRow(title='', due='', assignee='', priority=2, assigneeName='') {
+  return {title:String(title).trim(),due,assignee,assigneeName,priority,column_id:S.cols[0]?.id,checked:true};
+}
 function taskImportParentTitle(raw) {
-  const title=String(raw || '').replace(/\s+/g,' ').trim();
-  if (/^work breakdown structure\s*\(wbs\)$/i.test(title)) return 'WBS';
+  const title=String(raw||'').replace(/\s+/g,' ').trim();
+  if (/^(?:work|ork) breakdown structure(?:\s*\(wbs\))?$/i.test(title)) return 'WBS';
   return title;
 }
 function taskImportCleanTitle(text) {
-  let value=String(text || '').replace(/\bproofread\b/ig,'').replace(/\s+/g,' ').trim();
-  // OCR occasionally breaks numbering over several lines; keep the ranges as part of ONE task.
-  value=value.replace(/\b(?:WBS\s+)?Task Description\s*/i,'Task Description ');
-  const m=value.match(/^(.*?)\s+((?:\d+\.\d+\s*[-–—]\s*\d+\.\d+)(?:\s*[,;\s]+\s*\d+\.\d+\s*[-–—]\s*\d+\.\d+)*)$/i);
-  if (m) value=`${m[1].trim()} (${m[2].replace(/\s*[-–—]\s*/g,'–').replace(/\s*[,;]\s*/g,', ')})`;
-  return value.replace(/\s+/g,' ').trim();
+  let v=String(text||'').replace(/\bproofread\b/ig,'').replace(/[\u00a0]/g,' ').replace(/\s+/g,' ').trim();
+  v=v.replace(/^WBS\s+Task Description\b/i,'Task Description');
+  v=v.replace(/^(?:WBS\s+)?Task\s+Description\b/i,'Task Description');
+  v=v.replace(/\b(\d{1,2})[.\s](\d{1,2})\s*[-–—]\s*(\d{1,2})[.\s](\d{1,2})\b/g,(_,a,b,c,d)=>`${a}.${b}–${c}.${d}`);
+  const regex=/\b\d{1,2}\.\d{1,2}–\d{1,2}\.\d{1,2}\b/g;
+  const ranges=[...v.matchAll(regex)].map(x=>x[0]);
+  if(ranges.length && /Task Description/i.test(v)) {
+    const name=v.replace(regex,'').replace(/[(),;\s]+$/,'').trim();
+    return `${name} (${[...new Set(ranges)].join(', ')})`;
+  }
+  return v;
 }
-function taskImportJoin(parent, subtask) {
-  const p=taskImportParentTitle(parent);
-  const child=taskImportCleanTitle(subtask);
-  return p && child && !child.toLowerCase().startsWith(p.toLowerCase()+' - ')
-    ? `${p} - ${child}` : child;
+function taskImportJoin(parent, child) {
+  const p=taskImportParentTitle(parent), c=taskImportCleanTitle(child);
+  if(!c)return '';
+  if(!p || c.toLowerCase().startsWith(p.toLowerCase()+' - '))return c;
+  if(p==='WBS' && /^WBS\b/i.test(c))return c.replace(/^WBS\s+/i,'WBS - ');
+  return `${p} - ${c}`;
+}
+function taskImportPerson(text) {
+  const val=String(text||'').replace(/^[\s:~|,–—-]+|[\s:~|,–—-]+$/g,'').trim();
+  if(!val)return {id:'',name:''};
+  const exact=memberFromText(val);
+  if(exact)return {id:exact,name:val};
+  const m=S.members.map(x=>({id:x.id,name:nm(x)}));
+  const loose=m.filter(x=>x.name && (x.name.toLowerCase().includes(val.toLowerCase()) || val.toLowerCase().includes(x.name.split(' ')[0].toLowerCase())));
+  if(loose.length===1)return {id:loose[0].id,name:val};
+  return {id:'',name:val};
 }
 function taskImportParse(text) {
-  const raw = String(text || '').replace(/\r/g, '');
-  const lines = raw.split('\n').map(x => x.trim()).filter(Boolean);
-  const out = [];
-  let parent = '';
-  // OCR often puts a numbered range on the line AFTER its description.
-  const rangeOnly = /^(?:\d{1,2}[. ]\d{1,2}\s*[-–—]\s*\d{1,2}[. ]\d{1,2})(?:\s*[,;]\s*\d{1,2}[. ]\d{1,2}\s*[-–—]\s*\d{1,2}[. ]\d{1,2})*$/;
-  const dateAtEnd = /\b((?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+\d{1,2},?\s+20\d{2}|20\d{2}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]20\d{2})\s*$/i;
-  // Only use names from this group's membership to set assignees automatically.
-  // A name inferred from imperfect OCR is never assigned to someone else.
-  function splitWho(value) {
-    let t = String(value || '').trim().replace(/[~|–—-]\s*$/, '').trim();
-    const people = S.members.map(p => ({ name: nm(p), id: p.id }))
-      .filter(p => p.name).sort((a,b) => b.name.length-a.name.length);
-    for (const p of people) {
-      const names = [p.name, p.name.split(/\s+/)[0]];
-      for (const name of names) {
-        if (!name) continue;
-        const suffix = t.slice(-name.length);
-        if (suffix.toLowerCase() === name.toLowerCase() &&
-            (!t.length || t.length===name.length || /[\s|~,:;–—-]/.test(t[t.length-name.length-1]))) {
-          return { title: t.slice(0,-name.length).replace(/[\s|~,:;–—-]+$/,'').trim(), assignee:p.id };
+  const lines=String(text||'').replace(/\r/g,'').split('\n').map(x=>x.replace(/\u00a0/g,' ').trim()).filter(Boolean);
+  const out=[];let parent='';let pending='';let current=null;
+  const dateRE=/\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2}|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s*\d{1,2},?\s*20\d{2})\b/i;
+  const rangeRE=/\b\d{1,2}[. ]\d{1,2}\s*[-–—]\s*\d{1,2}[. ]\d{1,2}\b/g;
+  const headings=/^(work breakdown structure(?:\s*\(wbs\))?|ork breakdown structure|project organization and roles|schedule|research|design|implementation|documentation)$/i;
+  const people=[...S.members.map(m=>nm(m)), 'Charles','Maica','Margie','Alex','Elisha'].filter(Boolean).sort((a,b)=>b.length-a.length);
+  function parseWho(s){
+    let v=s.trim().replace(/[~|,:;–—-]+$/,'').trim();
+    for(const name of people){
+      for(const variant of [name,name.split(' ')[0]]){
+        if(!variant)continue;
+        const suffix=v.slice(-variant.length);
+        if(suffix.toLowerCase()===variant.toLowerCase() && (v.length===variant.length || /[\s,|~–—-]/.test(v[v.length-variant.length-1]))) {
+          return {title:v.slice(0,-variant.length).replace(/[~|,:;–—-]+$/,'').trim(),who:taskImportPerson(variant)};
         }
       }
     }
-    // For OCR rows with a visible delimiter, extract the name but leave it
-    // unassigned if it isn't a known group member.
-    const delimited = t.match(/^(.*?)\s+[~|]\s*([\p{L}][\p{L}\s.'-]*)$/u);
-    if (delimited) return {title:delimited[1].trim(), assignee:memberFromText(delimited[2])};
-    // OCR may contain named assignees not yet in the workspace.
-    const fallback = t.match(/^(.*?)\s+(Charles|Maica|Margie|Alex|Elisha)\s*$/i);
-    if (fallback) return {title:fallback[1].trim(), assignee:memberFromText(fallback[2])};
-    return {title:t, assignee:''};
+    // Extract an unknown name ONLY when a clear separator marks the member column.
+    const delimiter=v.match(/^(.*?)\s*[|~]\s*([\p{L}][\p{L}\s.'-]*)$/u);
+    if(delimiter)return {title:delimiter[1].trim(),who:taskImportPerson(delimiter[2])};
+    return {title:v,who:{id:'',name:''}};
   }
-  const isHeader = s => /^(?:task|subtask|member|idl|proofread)$/i.test(s) || /^task\s+subtask\s+member(?:\s+idl)?/i.test(s);
-  for (const line of lines) {
-    if (isHeader(line)) continue;
-    // Spreadsheet paste preserves tabs and empty cells for merged headings.
-    const cells = line.split(/\t|\s*\|\s*/).map(x=>x.trim());
-    if (cells.length >= 3) {
-      const [heading,subtask,assignee,due] = cells;
-      if (heading) parent = heading;
-      const date = importDate(due || cells.slice(2).join(' '));
-      const who = memberFromText(assignee || cells[2]);
-      if (subtask && !/^(member|subtask|idl|proofread)$/i.test(subtask) && (date || who)) {
-        out.push(taskImportMakeRow(taskImportJoin(parent,subtask),date,who));
-      }
+  for(const line of lines){
+    if(/^(TASK\s+SUBTASK|TASK\s*$|SUBTASK\s*$|MEMBER\s*$|IDL\s*$|PROOFREAD\s*$)/i.test(line))continue;
+    if(/^👍\s*\d+$/.test(line))continue;
+    if(headings.test(line)){parent=taskImportParentTitle(line);pending='';current=null;continue;}
+    const cells=line.split(/\t|\s*\|\s*/);
+    if(cells.length>=3){
+      const [a,b,c,d]=cells.map(t=>t.trim());
+      if(a && headings.test(a))parent=taskImportParentTitle(a);
+      const date=importDate(d||cells.slice(2).join(' '));
+      if(!b || !date)continue;
+      const who=taskImportPerson(c);
+      current=taskImportMakeRow(taskImportJoin(parent,b),date,who.id,2,who.id?'':who.name);
+      out.push(current);pending='';continue;
+    }
+    const ranges=[...line.matchAll(rangeRE)].map(x=>x[0]);
+    if(ranges.length && !dateRE.test(line) && /^[\d.\s,;()–—-]+$/.test(line)){
+      if(current){
+        current.title=taskImportCleanTitle(current.title+' '+ranges.join(', '));
+      } else pending=(pending+' '+line).trim();
       continue;
     }
-    if (/^work breakdown structure\s*\(wbs\)$/i.test(line)) {parent='WBS';continue;}
-    if (/^(project organization and roles|schedule|research|design|implementation)$/i.test(line)) {parent=line;continue;}
-    // Attach wrapped WBS number ranges to the previous task rather than
-    // creating a separate task with no date or assigned member.
-    if (rangeOnly.test(line) && out.length) {
-      const last=out[out.length-1];
-      const range=line.replace(/(\d)\s+(\d)/g,'$1.$2').replace(/\s*[-–—]\s*/g,'–');
-      last.title=taskImportCleanTitle(last.title+' '+range);
+    const match=line.match(dateRE);
+    if(!match){
+      if(/^WBS\s+Task Description/i.test(line))parent='WBS';
+      // OCR may leave a subtask label on a line above its date/member.
+      if(/^(?:WBS\s+)?Task Description\b/i.test(line) || /^Numbered list format/i.test(line))pending=(pending+' '+line).trim();
+      else if(pending && /^[\d.\s,;()–—-]+$/.test(line))pending=(pending+' '+line).trim();
       continue;
     }
-    const dateMatch=line.match(dateAtEnd);
-    if (!dateMatch) continue;
-    const date=importDate(dateMatch[1]);
-    if (!date) continue;
-    let front=line.slice(0,dateMatch.index).replace(/[\s~|,:;–—-]+$/,'').trim();
-    const parsed=splitWho(front);
-    let title=parsed.title;
-    if (!title) continue;
-    // WBS prefix often appears in OCR lines, even when merged-cell headings
-    // were not captured. Avoid duplicating the prefix in the final title.
-    if (/^WBS\s+Task Description\b/i.test(title)) {
-      parent='WBS';
-      title=title.replace(/^WBS\s+/i,'');
-    }
-    out.push(taskImportMakeRow(taskImportJoin(parent,title),date,parsed.assignee));
+    const date=importDate(match[0]);if(!date)continue;
+    const front=line.slice(0,match.index).replace(/[~|,:;–—-]+$/,'').trim();
+    const parsed=parseWho(front);
+    let title=(pending+' '+parsed.title).trim();
+    if(!title)title=parsed.title;
+    title=title.replace(/^(?:WBS\s+Task Description\s+){2,}/i,'WBS Task Description ');
+    if(/^WBS\s+Task Description/i.test(title))parent='WBS';
+    if(!title)continue;
+    current=taskImportMakeRow(taskImportJoin(parent,title),date,parsed.who.id,2,parsed.who.id?'':parsed.who.name);
+    out.push(current);pending='';
   }
-  // When OCR omits a vertically merged WBS heading but finds WBS in the
-  // following rows, associate an immediately preceding numbered-list task
-  // with that same section instead of leaving it without its parent.
-  if (out.some(r => /^WBS - Task Description\b/i.test(r.title))) {
-    for (const r of out) {
-      if (/^Numbered list format$/i.test(r.title)) r.title = 'WBS - Numbered List Format';
-    }
+  if(out.some(r=>/^WBS - Task Description/i.test(r.title))) {
+    for(const row of out)if(/^Numbered list format$/i.test(row.title))row.title='WBS - Numbered List Format';
   }
   return out.slice(0,150);
 }
 // Layout-aware screenshot extraction. Unlike raw OCR text, word bounding boxes
 // allow us to associate subtasks, members and dates by their table columns.
 function taskImportParseImage(data) {
-  const tsvWords=typeof data.tsv==='string' ? data.tsv.split('\n').slice(1).map(line=>{const c=line.split('\t');return {text:c.slice(11).join(' '),bbox:{x0:+c[6],y0:+c[7],x1:+c[6]+(+c[8]),y1:+c[7]+(+c[9])}};}).filter(w=>w.text) : [];
-  const blockWords=(data.blocks||[]).flatMap(b=>(b.paragraphs||[]).flatMap(p=>(p.lines||[]).flatMap(l=>l.words||[])));
-  const words=(data.words||blockWords.length&&blockWords||tsvWords).filter(w=>w.text?.trim() && Number.isFinite(w.bbox?.x0) && Number.isFinite(w.bbox?.y0))
+  // Prefer physical table coordinates to the reading order OCR produces for merged cells.
+  const tsv=typeof data.tsv==='string'?data.tsv.split('\n').slice(1).map(line=>{
+    const c=line.split('\t');return {text:c.slice(11).join(' '),bbox:{x0:+c[6],y0:+c[7],x1:+c[6]+(+c[8]),y1:+c[7]+(+c[9])}};
+  }).filter(w=>w.text):[];
+  const fromBlocks=(data.blocks||[]).flatMap(b=>(b.paragraphs||[]).flatMap(p=>(p.lines||[]).flatMap(l=>l.words||[])));
+  const words=(data.words?.length?data.words:fromBlocks.length?fromBlocks:tsv)
+    .filter(w=>w.text?.trim()&&Number.isFinite(w.bbox?.x0)&&Number.isFinite(w.bbox?.y0))
     .map(w=>({text:w.text.trim(),x:(w.bbox.x0+w.bbox.x1)/2,y:(w.bbox.y0+w.bbox.y1)/2}));
-  if (!words.length) return taskImportParse(data.text||'');
-  const clusters=[];
-  for (const word of words.sort((a,b)=>a.y-b.y || a.x-b.x)) {
-    let group=clusters.find(g=>Math.abs(g.y-word.y)<12);
-    if(!group) {group={y:word.y,words:[]};clusters.push(group);}
-    group.words.push(word);
-    group.y=group.words.reduce((a,w)=>a+w.y,0)/group.words.length;
+  if(!words.length)return taskImportParse(data.text||'');
+  const lines=[];
+  for(const word of words.sort((a,b)=>a.y-b.y||a.x-b.x)){
+    let l=lines.find(l=>Math.abs(l.y-word.y)<Math.max(8,l.height*.55));
+    if(!l){l={y:word.y,height:15,words:[]};lines.push(l);}
+    l.words.push(word);
+    l.y=l.words.reduce((sum,w)=>sum+w.y,0)/l.words.length;
   }
-  const lines=clusters.sort((a,b)=>a.y-b.y).map(g=>({...g,words:g.words.sort((a,b)=>a.x-b.x)}));
-  const header=lines.find(l=>/\bTASK\b/i.test(l.words.map(w=>w.text).join(' ')) && /\bSUBTASK\b/i.test(l.words.map(w=>w.text).join(' ')));
-  if (!header) return taskImportParse(data.text||'');
-  const hw=header.words;
-  const xOf=(label)=>{
-    const w=hw.find(w=>w.text.toUpperCase().replace(/[^A-Z]/g,'')===label);
-    return w?.x ?? null;
-  };
-  const xs=['TASK','SUBTASK','MEMBER','IDL'].map(xOf);
-  if(xs.some(x=>x===null))return taskImportParse(data.text||'');
-  const borders=[(xs[0]+xs[1])/2,(xs[1]+xs[2])/2,(xs[2]+xs[3])/2];
-  const cols=lines.filter(l=>l.y>header.y+12).map(l=>{
+  lines.forEach(l=>l.words.sort((a,b)=>a.x-b.x));
+  lines.sort((a,b)=>a.y-b.y);
+  const header=lines.find(l=>/\bTASK\b/i.test(l.words.map(w=>w.text).join(' '))&&/\bSUBTASK\b/i.test(l.words.map(w=>w.text).join(' ')));
+  if(!header)return taskImportParse(data.text||'');
+  const indexOf=h=>header.words.find(w=>w.text.toUpperCase().replace(/[^A-Z]/g,'')===h)?.x;
+  const cx=['TASK','SUBTASK','MEMBER','IDL'].map(indexOf);
+  if(cx.some(x=>x==null))return taskImportParse(data.text||'');
+  const cuts=[(cx[0]+cx[1])/2,(cx[1]+cx[2])/2,(cx[2]+cx[3])/2];
+  const dataLines=lines.filter(l=>l.y>header.y+10).map(l=>{
     const cells=[[],[],[],[]];
-    for(const w of l.words) cells[w.x<borders[0]?0:w.x<borders[1]?1:w.x<borders[2]?2:3].push(w.text);
-    return {y:l.y,cells:cells.map(w=>w.join(' ').trim())};
+    for(const w of l.words)cells[w.x<cuts[0]?0:w.x<cuts[1]?1:w.x<cuts[2]?2:3].push(w.text);
+    return {y:l.y,cells:cells.map(v=>v.join(' ').trim())};
   });
-  // Dates are the anchor for each true table row, even if a subtask wraps.
-  // OCR may split 'Nov 25, 2026' into separate recognized words on one line.
-  const anchorLines=cols.filter(l=>importDate(l.cells[3]));
-  if(!anchorLines.length)return taskImportParse(data.text||'');
-  const heights=anchorLines.slice(1).map((x,i)=>x.y-anchorLines[i].y).filter(d=>d>10).sort((a,b)=>a-b);
-  const rowHeight=heights.length?heights[Math.floor(heights.length/2)]:55;
-  const parents=cols.filter(l=>l.cells[0] && !l.cells[1] && !l.cells[2] && !l.cells[3])
-    .map(l=>({y:l.y,title:l.cells[0]}));
-  // A merged parent cell is often vertically centered across several rows;
-  // start with the first heading, then activate later headings near their section.
+  // For rows where OCR splits a date into several lines, group by their nearby date fragments.
+  const anchors=dataLines.filter(l=>importDate(l.cells[3]));
+  if(!anchors.length)return taskImportParse(data.text||'');
+  const groups=anchors.map((a,i)=>{
+    const prev=anchors[i-1]?.y??header.y;
+    const next=anchors[i+1]?.y??Infinity;
+    const low=i===0?header.y+8:(prev+a.y)/2;
+    const high=i===anchors.length-1?Infinity:(a.y+next)/2;
+    return {anchor:a,lines:dataLines.filter(l=>l.y>=low&&l.y<high),start:low,end:high};
+  });
+  // Vertically merged parent labels sit near the CENTER of a multi-row section.
+  // Assign a heading to the row interval bounded by midpoints between parent labels,
+  // rather than pretending its printed y-coordinate is its first subtask row.
+  const parentLabels=dataLines.filter(l=>l.cells[0]&&!l.cells[1]&&!l.cells[2]&&!l.cells[3]&&!/^(TASK|SUBTASK)$/i.test(l.cells[0]))
+    .map(l=>({y:l.y,name:taskImportParentTitle(l.cells[0])}));
   const out=[];
-  for(let i=0;i<anchorLines.length;i++) {
-    const anchor=anchorLines[i];
-    const start=i===0?header.y+8:(anchorLines[i-1].y+anchor.y)/2;
-    const end=i===anchorLines.length-1?Infinity:(anchor.y+anchorLines[i+1].y)/2;
-    const segment=cols.filter(l=>l.y>=start && l.y<end);
-    const subtask=segment.map(l=>l.cells[1]).filter(Boolean).join(' ');
-    const assignee=segment.map(l=>l.cells[2]).find(v=>memberFromText(v)) || anchor.cells[2];
-    const parent=parents.filter((p,idx)=>idx===0 || p.y-rowHeight<=anchor.y).at(-1)?.title || '';
-    const title=taskImportJoin(parent,subtask);
-    if(title)out.push(taskImportMakeRow(title,importDate(anchor.cells[3]),memberFromText(assignee)));
+  for(const g of groups){
+    const sub=g.lines.map(l=>l.cells[1]).filter(Boolean).join(' ').trim();
+    const whoText=g.lines.map(l=>l.cells[2]).filter(Boolean).join(' ').trim();
+    const who=taskImportPerson(whoText);
+    const parent=parentLabels.length?parentLabels.reduce((best,p)=>Math.abs(p.y-g.anchor.y)<Math.abs(best.y-g.anchor.y)?p:best).name:'';
+    // If a parent label has a genuine section heading, preserve it, but don't
+    // overwrite a WBS subtask already carrying the WBS prefix.
+    const title=taskImportJoin(parent,sub);
+    if(title)out.push(taskImportMakeRow(title,importDate(g.anchor.cells[3]),who.id,2,who.id?'':who.name));
   }
-  return out.slice(0,150);
+  return out.length?out.slice(0,150):taskImportParse(data.text||'');
 }
 async function taskImportScript(url, name) {
   if(window[name]) return;
@@ -1332,6 +1344,8 @@ async function taskImportSave() {
   const selected=taskImportState.rows.filter(r=>r.checked && r.title.trim());
   if(!selected.length)return taskImportStatus('Select at least one task with a title.');
   if(selected.length>150)return taskImportStatus('Please import at most 150 tasks at once.');
+  const uncertain=selected.filter(r=>r.assigneeName&&!r.assignee);
+  if(uncertain.length)return taskImportStatus(`${uncertain.length} assigned names could not be matched. Choose a workspace member for the highlighted rows, or select Unassigned deliberately.`);
   if(!confirm(`Add ${selected.length} tasks to ${S.group.name}? Everyone in the group will see them.`))return;
   const payload=selected.map(r=>({group_id:S.group.id,title:r.title.trim(),due:r.due||null,priority:+r.priority,assignee:r.assignee && r.assignee!=='__ALL__'?r.assignee:null,assigned_to_all:r.assignee==='__ALL__',column_id:r.column_id||S.cols[0]?.id}));
   taskImportBusy(true);taskImportStatus('Saving tasks to your shared workspace…');
@@ -1361,6 +1375,7 @@ document.addEventListener('change',e=>{
   const el=e.target.closest?.('[data-import-field]');if(!el)return;
   const i=Number(el.closest('tr')?.dataset.importIndex);const r=taskImportState.rows[i];if(!r)return;
   r[el.dataset.importField]=el.type==='checkbox'?el.checked:el.dataset.importField==='priority'?Number(el.value):el.value;
+  if(el.dataset.importField==='assignee')r.assigneeName='';
 });
 document.addEventListener('input',e=>{
   const el=e.target.closest?.('[data-import-field="title"]');if(!el)return;

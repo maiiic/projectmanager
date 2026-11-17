@@ -1384,3 +1384,8 @@ html[data-theme="dark"] .time-grid > .time-event.event-chip.t { border-left-colo
 @media (max-width: 560px) {
   .import-toolbar #task-import-status { width: 100%; }
 }
+
+/* Table import: visible ambiguity without confusing it with failed extraction */
+.import-table tr.import-review-uncertain {background:#fffbf1;}
+.import-review-warning {display:block;margin-top:5px;color:#956b21;font-size:.7rem;line-height:1.4;font-weight:700;}
+.import-table tr.import-review-uncertain select[data-import-field="assignee"] {border-color:#f2cb79;}

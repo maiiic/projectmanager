@@ -488,7 +488,7 @@ const card = (t) => `<article class="tcard urg-${urg(t)}" draggable="true" data-
 function tasks() {
   const opts = S.members.map((p) => `<option value="${p.id}">${esc(nm(p))}</option>`).join("");
   return `<div class="bar"><div><h1>Tasks</h1><p class="hint">Sorted by due date, then priority. Drag cards between columns, or click a column name to rename it.</p></div>
-  <div class="task-heading-actions"><button type="button" class="btn btn-quiet" data-import-tasks>↥ Import tasks</button><button type="button" class="btn btn-quiet" data-addcol>+ Add column</button></div></div>
+  <div class="task-heading-actions"><button type="button" class="btn btn-import-purple" data-import-tasks>↥ Import tasks</button><button type="button" class="btn btn-quiet" data-addcol>+ Add column</button></div></div>
   <form class="addtask" data-form="task"><input name="title" placeholder="New task" required>
   <input name="due" type="date" aria-label="Due date"><select name="priority" aria-label="Priority"><option value="3">High</option><option value="2" selected>Medium</option><option value="1">Low</option></select>
   <select name="assignee" aria-label="Assignee"><option value="">Unassigned</option><option value="__ALL__">All members</option>${opts}</select><button class="btn">Add task</button></form>
@@ -1076,7 +1076,7 @@ function taskImportModal() {
     <div class="import-heading"><div><span class="import-kicker">TASK IMPORT</span><h2>Import tasks from a table</h2><p>Upload a PDF or image, paste a screenshot, or paste table text. Review everything before adding it to your group.</p></div><button type="button" class="icon" data-import-close aria-label="Close">✕</button></div>
     <div class="import-upload" tabindex="0" role="button" aria-label="Choose a PDF or image"><strong>Choose a file or paste a screenshot</strong><small>PDF, PNG, JPG, WEBP, CSV, TSV, or TXT · Cmd/Ctrl + V works while this window is open</small><input id="task-import-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,application/pdf,image/*,text/plain,text/csv" hidden></div>
     <label class="import-text-label">Or paste table text <textarea id="task-import-text" rows="3" placeholder="Paste rows copied from a spreadsheet or a table, then click Extract tasks..."></textarea></label>
-    <div class="import-toolbar"><button class="btn btn-quiet" type="button" data-import-extract>Extract from pasted text</button><span id="task-import-status" role="status">Nothing imported yet</span></div>
+    <div class="import-toolbar"><button class="btn btn-import-extract" type="button" data-import-extract>Extract from pasted text</button><span id="task-import-status" role="status">Nothing imported yet</span></div>
     <div class="import-review" id="task-import-review" hidden><div class="import-review-title"><strong>Review tasks <span id="task-import-count"></span></strong><button type="button" class="btn btn-quiet" data-import-addrow>+ Add row</button></div><p class="import-help">Extraction is best-effort, especially for screenshots and merged cells. Check every title, assignee, and due date. Duplicate tasks are not automatically removed.</p><div class="import-table-scroll"><table class="import-table"><thead><tr><th>Import</th><th>Task title</th><th>Due date</th><th>Assigned to</th><th>Priority</th><th>Status</th><th></th></tr></thead><tbody id="task-import-rows"></tbody></table></div></div>
     <div class="import-footer"><button type="button" class="btn btn-quiet" data-import-close>Cancel</button><button type="button" class="btn" data-import-save disabled>Import selected tasks</button></div>
   </section>`;
@@ -1086,7 +1086,14 @@ function taskImportModal() {
   el.querySelector('#task-import-file').addEventListener('change', async e => { const file=e.target.files?.[0]; if(file) await readImportFile(file); });
   el.querySelector('#task-import-text').focus();
 }
-function taskImportStatus(message) { const el=document.getElementById('task-import-status'); if(el) el.textContent=message; }
+function taskImportStatus(message) {
+  const el = document.getElementById('task-import-status');
+  if (!el) return;
+  el.textContent = message;
+  const isGood = /^(Extracted |Found |Imported |Saved \d+ tasks)/i.test(message);
+  const isError = /^(Import failed|No task rows|File is too large|Select at least|Please import at most|Saved \d+, then stopped)/i.test(message);
+  el.className = isGood ? 'import-status-success' : isError ? 'import-status-error' : 'import-status-info';
+}
 function taskImportBusy(value) {
   taskImportState.busy=value;
   const dlg=document.getElementById('task-import-overlay');
@@ -1105,33 +1112,109 @@ function taskImportRender() {
   dlg.querySelector('[data-import-save]').disabled=!taskImportState.rows.length || taskImportState.busy;
 }
 function taskImportMakeRow(title='', due='', assignee='', priority=2) { return {title:String(title).trim(),due,assignee,priority,column_id:S.cols[0]?.id,checked:true}; }
+function taskImportParentTitle(raw) {
+  const title=String(raw || '').replace(/\s+/g,' ').trim();
+  if (/^work breakdown structure\s*\(wbs\)$/i.test(title)) return 'WBS';
+  return title;
+}
+function taskImportCleanTitle(text) {
+  let value=String(text || '').replace(/\bproofread\b/ig,'').replace(/\s+/g,' ').trim();
+  // OCR occasionally breaks numbering over several lines; keep the ranges as part of ONE task.
+  value=value.replace(/\b(?:WBS\s+)?Task Description\s*/i,'Task Description ');
+  const m=value.match(/^(.*?)\s+((?:\d+\.\d+\s*[-–—]\s*\d+\.\d+)(?:\s*[,;\s]+\s*\d+\.\d+\s*[-–—]\s*\d+\.\d+)*)$/i);
+  if (m) value=`${m[1].trim()} (${m[2].replace(/\s*[-–—]\s*/g,'–').replace(/\s*[,;]\s*/g,', ')})`;
+  return value.replace(/\s+/g,' ').trim();
+}
+function taskImportJoin(parent, subtask) {
+  const p=taskImportParentTitle(parent);
+  const child=taskImportCleanTitle(subtask);
+  return p && child && !child.toLowerCase().startsWith(p.toLowerCase()+' - ')
+    ? `${p} - ${child}` : child;
+}
 function taskImportParse(text) {
-  const lines=String(text).replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
+  const raw=String(text || '').replace(/\r/g,'');
+  const lines=raw.split('\n').filter(x=>x.trim());
   const out=[];
   let parent='';
-  let header=false;
-  for(const line of lines) {
-    if (/^(task|subtask|member|proofread|idl|deadline|due date)(\s|$)/i.test(line) && /task|member|date/i.test(line)) {header=true;continue;}
-    if (/^\d+$/.test(line) || /^(👍\s*\d+|proofread|member|idl)$/i.test(line)) continue;
-    const parts=line.split(/\t|\s{3,}|\s*\|\s*/).map(x=>x.trim()).filter(Boolean);
-    if(!parts.length) continue;
+  for (const line of lines) {
+    // Spreadsheet paste preserves tabs, including blank cells below a merged parent cell.
+    const cells=line.split(/\t|\s*\|\s*/).map(x=>x.trim());
+    if (/^task$/i.test(cells[0]) && cells.some(x=>/^subtask$/i.test(x))) continue;
+    if (cells.length>=3) {
+      const [heading, subtask, assignee, due]=cells;
+      if (heading) parent=heading;
+      const date=importDate(due || cells.slice(2).join(' '));
+      const who=memberFromText(assignee || cells[2]);
+      if (subtask && !/^(member|subtask|idl|proofread)$/i.test(subtask) && (date || who))
+        out.push(taskImportMakeRow(taskImportJoin(parent,subtask),date,who));
+      continue;
+    }
+    // Simple text is deliberately treated as unstructured. OCR screenshots use
+    // taskImportParseImage() below, which retains the coordinates of table cells.
     const date=importDate(line);
-    const mem=parts.map(memberFromText).find(Boolean) || '';
-    let title=parts[0];
-    if (parts.length>1) {
-      const filtered=parts.filter(x => !importDate(x) && !memberFromText(x) && !/^(\d+|👍\s*\d+)$/.test(x));
-      title=filtered[filtered.length>1?1:0] || title;
-      if(filtered.length>1 && filtered[0].length>3) parent=filtered[0];
+    if (!date) {
+      if (/^(work breakdown structure|project organization and roles|schedule|research|design|implementation)$/i.test(line.trim())) parent=line.trim();
+      continue;
     }
-    if (!date && !mem && parts.length===1 && line.length<85 && !/\b(20\d{2})\b/.test(line)) {
-      // Standalone table section / parent heading, or an undated task.
-      if (/^(work breakdown|project organization|schedule|design|testing|implementation|documentation|research)/i.test(line)) { parent=line; continue; }
-    }
-    title=title.replace(/\s*👍\s*\d+\s*$/,'').trim();
-    if (!title || /^(task|subtask|member|idl|proofread)$/i.test(title) || /^\d{1,2}\/\d{1,2}\/20\d{2}$/.test(title)) continue;
-    if (/^\d{1,3}$/.test(title)) continue;
-    if (parent && title!==parent && !title.toLowerCase().startsWith(parent.toLowerCase())) title=`${parent} — ${title}`;
-    out.push(taskImportMakeRow(title,date,mem));
+    const parts=line.split(/\s{2,}/).map(v=>v.trim()).filter(Boolean);
+    const who=parts.map(memberFromText).find(Boolean)||'';
+    const title=parts.filter(x=>!importDate(x) && !memberFromText(x)).join(' ');
+    if (title) out.push(taskImportMakeRow(taskImportJoin(parent,title),date,who));
+  }
+  return out.slice(0,150);
+}
+// Layout-aware screenshot extraction. Unlike raw OCR text, word bounding boxes
+// allow us to associate subtasks, members and dates by their table columns.
+function taskImportParseImage(data) {
+  const tsvWords=typeof data.tsv==='string' ? data.tsv.split('\n').slice(1).map(line=>{const c=line.split('\t');return {text:c.slice(11).join(' '),bbox:{x0:+c[6],y0:+c[7],x1:+c[6]+(+c[8]),y1:+c[7]+(+c[9])}};}).filter(w=>w.text) : [];
+  const blockWords=(data.blocks||[]).flatMap(b=>(b.paragraphs||[]).flatMap(p=>(p.lines||[]).flatMap(l=>l.words||[])));
+  const words=(data.words||blockWords.length&&blockWords||tsvWords).filter(w=>w.text?.trim() && Number.isFinite(w.bbox?.x0) && Number.isFinite(w.bbox?.y0))
+    .map(w=>({text:w.text.trim(),x:(w.bbox.x0+w.bbox.x1)/2,y:(w.bbox.y0+w.bbox.y1)/2}));
+  if (!words.length) return taskImportParse(data.text||'');
+  const clusters=[];
+  for (const word of words.sort((a,b)=>a.y-b.y || a.x-b.x)) {
+    let group=clusters.find(g=>Math.abs(g.y-word.y)<12);
+    if(!group) {group={y:word.y,words:[]};clusters.push(group);}
+    group.words.push(word);
+    group.y=group.words.reduce((a,w)=>a+w.y,0)/group.words.length;
+  }
+  const lines=clusters.sort((a,b)=>a.y-b.y).map(g=>({...g,words:g.words.sort((a,b)=>a.x-b.x)}));
+  const header=lines.find(l=>/\bTASK\b/i.test(l.words.map(w=>w.text).join(' ')) && /\bSUBTASK\b/i.test(l.words.map(w=>w.text).join(' ')));
+  if (!header) return taskImportParse(data.text||'');
+  const hw=header.words;
+  const xOf=(label)=>{
+    const w=hw.find(w=>w.text.toUpperCase().replace(/[^A-Z]/g,'')===label);
+    return w?.x ?? null;
+  };
+  const xs=['TASK','SUBTASK','MEMBER','IDL'].map(xOf);
+  if(xs.some(x=>x===null))return taskImportParse(data.text||'');
+  const borders=[(xs[0]+xs[1])/2,(xs[1]+xs[2])/2,(xs[2]+xs[3])/2];
+  const cols=lines.filter(l=>l.y>header.y+12).map(l=>{
+    const cells=[[],[],[],[]];
+    for(const w of l.words) cells[w.x<borders[0]?0:w.x<borders[1]?1:w.x<borders[2]?2:3].push(w.text);
+    return {y:l.y,cells:cells.map(w=>w.join(' ').trim())};
+  });
+  // Dates are the anchor for each true table row, even if a subtask wraps.
+  // OCR may split 'Nov 25, 2026' into separate recognized words on one line.
+  const anchorLines=cols.filter(l=>importDate(l.cells[3]));
+  if(!anchorLines.length)return taskImportParse(data.text||'');
+  const heights=anchorLines.slice(1).map((x,i)=>x.y-anchorLines[i].y).filter(d=>d>10).sort((a,b)=>a-b);
+  const rowHeight=heights.length?heights[Math.floor(heights.length/2)]:55;
+  const parents=cols.filter(l=>l.cells[0] && !l.cells[1] && !l.cells[2] && !l.cells[3])
+    .map(l=>({y:l.y,title:l.cells[0]}));
+  // A merged parent cell is often vertically centered across several rows;
+  // start with the first heading, then activate later headings near their section.
+  const out=[];
+  for(let i=0;i<anchorLines.length;i++) {
+    const anchor=anchorLines[i];
+    const start=i===0?header.y+8:(anchorLines[i-1].y+anchor.y)/2;
+    const end=i===anchorLines.length-1?Infinity:(anchor.y+anchorLines[i+1].y)/2;
+    const segment=cols.filter(l=>l.y>=start && l.y<end);
+    const subtask=segment.map(l=>l.cells[1]).filter(Boolean).join(' ');
+    const assignee=segment.map(l=>l.cells[2]).find(v=>memberFromText(v)) || anchor.cells[2];
+    const parent=parents.filter((p,idx)=>idx===0 || p.y-rowHeight<=anchor.y).at(-1)?.title || '';
+    const title=taskImportJoin(parent,subtask);
+    if(title)out.push(taskImportMakeRow(title,importDate(anchor.cells[3]),memberFromText(assignee)));
   }
   return out.slice(0,150);
 }
@@ -1141,10 +1224,10 @@ async function taskImportScript(url, name) {
     const s=document.createElement('script');s.src=url;s.onload=resolve;s.onerror=()=>reject(Error(`Could not load ${name}. Check internet access.`));document.head.appendChild(s);
   });
 }
-async function taskImportOcr(image) {
+async function taskImportOcr(image, structured=false) {
   await taskImportScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js','Tesseract');
-  const r=await Tesseract.recognize(image,'eng');
-  return r.data.text || '';
+  const r=await Tesseract.recognize(image,'eng',{}, structured ? { text:true, tsv:true, blocks:true } : {text:true});
+  return structured ? r.data : (r.data.text || '');
 }
 async function taskImportPdf(file) {
   await taskImportScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js','pdfjsLib');
@@ -1176,12 +1259,16 @@ async function readImportFile(file) {
   taskImportStatus(`Reading ${file.name || 'pasted image'}…`);
   try {
     let raw='';
-    if(file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name)) raw=await taskImportOcr(file);
+    if(file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name)) {
+      const recognized=await taskImportOcr(file,true);
+      raw=recognized.text || '';
+      taskImportState.rows=taskImportParseImage(recognized);
+    }
     else if(file.type==='application/pdf' || /\.pdf$/i.test(file.name)) raw=await taskImportPdf(file);
     else if(/\.(csv|tsv|txt)$/i.test(file.name) || file.type.startsWith('text/')) raw=await file.text();
     else throw Error('Supported formats: PDF, PNG, JPG, WEBP, CSV, TSV, TXT.');
     document.getElementById('task-import-text').value=raw;
-    taskImportState.rows=taskImportParse(raw);
+    if(!(file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name))) taskImportState.rows=taskImportParse(raw);
     taskImportRender();
     taskImportStatus(taskImportState.rows.length?`Extracted ${taskImportState.rows.length} possible tasks. Review/edit before importing.`:'No task rows detected. Try pasting table text or use + Add row.');
   } catch(err) {taskImportStatus(`Import failed: ${err.message}`);}

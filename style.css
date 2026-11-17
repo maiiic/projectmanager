@@ -1335,3 +1335,52 @@ html[data-theme="dark"] .time-grid > .time-event.event-chip.t { border-left-colo
 .import-upload small{color:#6b6680}.import-text-label{display:block;font-size:.82rem;font-weight:700;margin-top:14px}.import-text-label textarea{display:block;width:100%;box-sizing:border-box;margin-top:6px;min-height:72px;background:var(--card,#fff);border:1px solid var(--line,#ddd);border-radius:12px;padding:10px;resize:vertical;color:var(--ink,#27313b);font:inherit}
 .import-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0}.import-toolbar span{font-size:.84rem;color:var(--muted,#73818a)}.import-review{margin-top:15px}.import-review-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.import-help{margin-top:8px}.import-table-scroll{width:100%;max-height:38vh;overflow:auto;border:1px solid var(--line,#e5e0d7);border-radius:14px}.import-table{width:100%;border-collapse:collapse;min-width:840px;font-size:.82rem}.import-table th{position:sticky;top:0;background:var(--card,#fffcf5);z-index:1;color:var(--muted,#6b7a80);font-weight:800;padding:10px;text-align:left;white-space:nowrap}.import-table td{border-top:1px solid var(--line,#ece7df);padding:7px}.import-table input:not([type="checkbox"]),.import-table select{width:100%;box-sizing:border-box;background:var(--card,#fff);color:var(--ink,#29323a);border:1px solid var(--line,#ddd);border-radius:9px;min-height:34px;padding:5px 8px;font:inherit}.import-table .import-task-title{min-width:230px}.import-table input[type="date"]{min-width:140px}.import-table select{min-width:110px}.import-table tr:hover{background:rgba(136,120,194,.07)}.import-footer{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.import-footer button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:600px){.import-overlay{padding:6px}.import-dialog{padding:15px;max-height:98dvh;border-radius:18px}.import-heading h2{font-size:1.2rem}}
+
+
+/* Task import: clear, compact action and status colors */
+.btn.btn-import-purple,
+.btn.btn-import-purple:hover {
+  background: #EDE6FA;
+  color: #654A91;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+.btn.btn-import-purple:hover { background: #E4D8F7; }
+.btn.btn-import-extract {
+  background: #E3EFFB;
+  color: #245F9A;
+  border: 0;
+  box-shadow: none;
+  font-weight: 800;
+}
+.btn.btn-import-extract:hover { background: #D7E8FA; }
+.import-toolbar #task-import-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 34px;
+  box-sizing: border-box;
+  padding: 7px 13px;
+  border: 0;
+  border-radius: 12px;
+  font-size: .84rem;
+  line-height: 1.35;
+  font-weight: 700;
+  box-shadow: none;
+}
+.import-toolbar #task-import-status.import-status-success {
+  background: #E2F3E9;
+  color: #256C4E;
+}
+.import-toolbar #task-import-status.import-status-info {
+  background: #E9F1FA;
+  color: #365F89;
+}
+.import-toolbar #task-import-status.import-status-error {
+  background: #FBE8E8;
+  color: #A13D55;
+}
+@media (max-width: 560px) {
+  .import-toolbar #task-import-status { width: 100%; }
+}

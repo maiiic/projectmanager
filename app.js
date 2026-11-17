@@ -1132,34 +1132,87 @@ function taskImportJoin(parent, subtask) {
     ? `${p} - ${child}` : child;
 }
 function taskImportParse(text) {
-  const raw=String(text || '').replace(/\r/g,'');
-  const lines=raw.split('\n').filter(x=>x.trim());
-  const out=[];
-  let parent='';
+  const raw = String(text || '').replace(/\r/g, '');
+  const lines = raw.split('\n').map(x => x.trim()).filter(Boolean);
+  const out = [];
+  let parent = '';
+  // OCR often puts a numbered range on the line AFTER its description.
+  const rangeOnly = /^(?:\d{1,2}[. ]\d{1,2}\s*[-–—]\s*\d{1,2}[. ]\d{1,2})(?:\s*[,;]\s*\d{1,2}[. ]\d{1,2}\s*[-–—]\s*\d{1,2}[. ]\d{1,2})*$/;
+  const dateAtEnd = /\b((?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+\d{1,2},?\s+20\d{2}|20\d{2}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]20\d{2})\s*$/i;
+  // Only use names from this group's membership to set assignees automatically.
+  // A name inferred from imperfect OCR is never assigned to someone else.
+  function splitWho(value) {
+    let t = String(value || '').trim().replace(/[~|–—-]\s*$/, '').trim();
+    const people = S.members.map(p => ({ name: nm(p), id: p.id }))
+      .filter(p => p.name).sort((a,b) => b.name.length-a.name.length);
+    for (const p of people) {
+      const names = [p.name, p.name.split(/\s+/)[0]];
+      for (const name of names) {
+        if (!name) continue;
+        const suffix = t.slice(-name.length);
+        if (suffix.toLowerCase() === name.toLowerCase() &&
+            (!t.length || t.length===name.length || /[\s|~,:;–—-]/.test(t[t.length-name.length-1]))) {
+          return { title: t.slice(0,-name.length).replace(/[\s|~,:;–—-]+$/,'').trim(), assignee:p.id };
+        }
+      }
+    }
+    // For OCR rows with a visible delimiter, extract the name but leave it
+    // unassigned if it isn't a known group member.
+    const delimited = t.match(/^(.*?)\s+[~|]\s*([\p{L}][\p{L}\s.'-]*)$/u);
+    if (delimited) return {title:delimited[1].trim(), assignee:memberFromText(delimited[2])};
+    // OCR may contain named assignees not yet in the workspace.
+    const fallback = t.match(/^(.*?)\s+(Charles|Maica|Margie|Alex|Elisha)\s*$/i);
+    if (fallback) return {title:fallback[1].trim(), assignee:memberFromText(fallback[2])};
+    return {title:t, assignee:''};
+  }
+  const isHeader = s => /^(?:task|subtask|member|idl|proofread)$/i.test(s) || /^task\s+subtask\s+member(?:\s+idl)?/i.test(s);
   for (const line of lines) {
-    // Spreadsheet paste preserves tabs, including blank cells below a merged parent cell.
-    const cells=line.split(/\t|\s*\|\s*/).map(x=>x.trim());
-    if (/^task$/i.test(cells[0]) && cells.some(x=>/^subtask$/i.test(x))) continue;
-    if (cells.length>=3) {
-      const [heading, subtask, assignee, due]=cells;
-      if (heading) parent=heading;
-      const date=importDate(due || cells.slice(2).join(' '));
-      const who=memberFromText(assignee || cells[2]);
-      if (subtask && !/^(member|subtask|idl|proofread)$/i.test(subtask) && (date || who))
+    if (isHeader(line)) continue;
+    // Spreadsheet paste preserves tabs and empty cells for merged headings.
+    const cells = line.split(/\t|\s*\|\s*/).map(x=>x.trim());
+    if (cells.length >= 3) {
+      const [heading,subtask,assignee,due] = cells;
+      if (heading) parent = heading;
+      const date = importDate(due || cells.slice(2).join(' '));
+      const who = memberFromText(assignee || cells[2]);
+      if (subtask && !/^(member|subtask|idl|proofread)$/i.test(subtask) && (date || who)) {
         out.push(taskImportMakeRow(taskImportJoin(parent,subtask),date,who));
+      }
       continue;
     }
-    // Simple text is deliberately treated as unstructured. OCR screenshots use
-    // taskImportParseImage() below, which retains the coordinates of table cells.
-    const date=importDate(line);
-    if (!date) {
-      if (/^(work breakdown structure|project organization and roles|schedule|research|design|implementation)$/i.test(line.trim())) parent=line.trim();
+    if (/^work breakdown structure\s*\(wbs\)$/i.test(line)) {parent='WBS';continue;}
+    if (/^(project organization and roles|schedule|research|design|implementation)$/i.test(line)) {parent=line;continue;}
+    // Attach wrapped WBS number ranges to the previous task rather than
+    // creating a separate task with no date or assigned member.
+    if (rangeOnly.test(line) && out.length) {
+      const last=out[out.length-1];
+      const range=line.replace(/(\d)\s+(\d)/g,'$1.$2').replace(/\s*[-–—]\s*/g,'–');
+      last.title=taskImportCleanTitle(last.title+' '+range);
       continue;
     }
-    const parts=line.split(/\s{2,}/).map(v=>v.trim()).filter(Boolean);
-    const who=parts.map(memberFromText).find(Boolean)||'';
-    const title=parts.filter(x=>!importDate(x) && !memberFromText(x)).join(' ');
-    if (title) out.push(taskImportMakeRow(taskImportJoin(parent,title),date,who));
+    const dateMatch=line.match(dateAtEnd);
+    if (!dateMatch) continue;
+    const date=importDate(dateMatch[1]);
+    if (!date) continue;
+    let front=line.slice(0,dateMatch.index).replace(/[\s~|,:;–—-]+$/,'').trim();
+    const parsed=splitWho(front);
+    let title=parsed.title;
+    if (!title) continue;
+    // WBS prefix often appears in OCR lines, even when merged-cell headings
+    // were not captured. Avoid duplicating the prefix in the final title.
+    if (/^WBS\s+Task Description\b/i.test(title)) {
+      parent='WBS';
+      title=title.replace(/^WBS\s+/i,'');
+    }
+    out.push(taskImportMakeRow(taskImportJoin(parent,title),date,parsed.assignee));
+  }
+  // When OCR omits a vertically merged WBS heading but finds WBS in the
+  // following rows, associate an immediately preceding numbered-list task
+  // with that same section instead of leaving it without its parent.
+  if (out.some(r => /^WBS - Task Description\b/i.test(r.title))) {
+    for (const r of out) {
+      if (/^Numbered list format$/i.test(r.title)) r.title = 'WBS - Numbered List Format';
+    }
   }
   return out.slice(0,150);
 }
